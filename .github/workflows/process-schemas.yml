@@ -2,6 +2,8 @@ name: Process Schemas
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "schema/**/*.json"
       - "!schema/**/*bundle*.json"
