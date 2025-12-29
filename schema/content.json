@@ -641,11 +641,11 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier of the tab. Used in the URL when navigating to this tab (typically a simplified version of the label)."
+          "description": "Unique identifier of the tab. Use 'default' to override the auto-prepended Details tab in record views and redeclare its fields."
         },
         "label": {
           "type": "string",
-          "description": "Label displayed as the tab text in the dashboard UI."
+          "description": "Label displayed as the tab text in the dashboard UI. Defaults to wordified id if omitted."
         },
         "query": {
           "$ref": "#/$defs/QueryExpression"
@@ -658,7 +658,7 @@
           }
         }
       },
-      "required": ["id", "label"],
+      "required": ["id"],
       "additionalProperties": false
     },
     "View": {
