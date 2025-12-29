@@ -277,7 +277,7 @@ export type CoreFieldType =
 /**
  * Field configuration within a view.
  */
-export type ViewField = {
+export interface ViewField {
   /**
    * Identifier of the underlying content field or standard model field.
    */
@@ -331,7 +331,7 @@ export type ViewField = {
    * For layout elements like 'field_row', nested view fields.
    */
   fields?: ViewField[];
-};
+}
 
 /**
  * Tab configuration within a list or record view. List view tabs use 'query' to filter results. Record view tabs use 'fields' to organize form sections.
@@ -395,9 +395,21 @@ export interface ViewNav {
     | "customers"
     | "content";
   /**
-   * Icon identifier for top-level navigation items (when parent is not defined).
+   * Icon identifier for top-level navigation items (when parent is not defined). If unset, the app's logo_icon will appear as a secondary badge.
    */
-  icon?: string;
+  icon?:
+    | "home"
+    | "orders"
+    | "subscriptions"
+    | "customers"
+    | "products"
+    | "discounts"
+    | "apps"
+    | "reporting"
+    | "storefront"
+    | "integrations"
+    | "developer"
+    | "settings";
 }
 
 /**

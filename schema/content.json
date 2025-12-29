@@ -476,7 +476,21 @@
         },
         "icon": {
           "type": "string",
-          "description": "Icon identifier for top-level navigation items (when parent is not defined)."
+          "enum": [
+            "home",
+            "orders",
+            "subscriptions",
+            "customers",
+            "products",
+            "discounts",
+            "apps",
+            "reporting",
+            "storefront",
+            "integrations",
+            "developer",
+            "settings"
+          ],
+          "description": "Icon identifier for top-level navigation items (when parent is not defined). If unset, the app's logo_icon will appear as a secondary badge."
         }
       },
       "additionalProperties": false
