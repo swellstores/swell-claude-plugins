@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://json.swell.store/model-field-guards.json",
+  "title": "Field cross-guards",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "fields": { "type": "object" }
+        },
+        "required": ["fields"]
+      },
+      "then": {
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "enum": ["object", "array", "collection"],
+            "description": "When 'fields' is defined, type must be explicitly specified as 'object', 'array', or 'collection'."
+          }
+        },
+        "errorMessage": "When 'fields' property is present, 'type' must be explicitly specified as 'object', 'array', or 'collection' to avoid ambiguous behavior."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": { "const": "array" },
+          "value_type": { "const": "object" }
+        },
+        "required": ["value_type"]
+      },
+      "then": {
+        "required": ["fields"],
+        "errorMessage": "Array fields with value_type 'object' must define 'fields' schema."
+      }
+    }
+  ]
+}

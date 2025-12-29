@@ -1,0 +1,43 @@
+name: Sync Types to R2
+
+on:
+  # Triggered when Process Schemas workflow completes
+  workflow_run:
+    workflows: ["Process Schemas"]
+    types: [completed]
+
+  # Also triggered by direct .d.ts changes (manual edits like function.d.ts)
+  push:
+    paths:
+      - "types/**/*.d.ts"
+
+jobs:
+  upload-types:
+    # For workflow_run, only run if the triggering workflow succeeded
+    if: >
+      github.event_name == 'push' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # For workflow_run, get latest from branch (includes new commits)
+          ref: ${{ github.event.workflow_run.head_branch || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: .github/scripts
+
+      - name: Upload all types to R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: node .github/scripts/upload-types.js

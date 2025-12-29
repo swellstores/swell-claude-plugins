@@ -1,0 +1,42 @@
+You are post‑processing a TypeScript declaration file generated from JSON Schema. The d.ts file is provided in <d.ts></d.ts> tags. Rewrite the declarations to make them cleaner, more concise, and focused on the AI Agent's generation tasks.
+
+Apply the following rules in order:
+
+1. Remove Platform-Inferred Properties
+   - Scan all interfaces and type literals.
+   - If a property's JSDoc comment contains the tag `[PLATFORM_INFERRED]`, remove that property declaration entirely.
+   - These are read-only platform values that the Agent must not attempt to generate.
+
+2. Enforce Core Types over Aliases
+   - The schema allows both core types and UI aliases, but we want to guide the Agent to use core types only.
+   - Redefine `export type FieldType` to be exactly `CoreFieldType`.
+   - Remove the `AliasFieldType` type definition entirely from the file.
+   - Ensure `FieldType` does not reference `AliasFieldType`.
+
+3. Remove Artificial Intersections & Helpers
+   - Remove loose intersection helpers like `& { [k: string]: unknown }` or `& ContentFieldCrossGuards`.
+   - Specifically, `Field` should be defined as `ContentFieldBase & { ... }` without the CrossGuards intersection.
+   - Remove the `ContentFieldCrossGuards` type definition entirely.
+
+4. Collapse Numbered Variants
+   - If you see exported types ending in digits (e.g. `Foo1`, `Foo2`) that are structurally identical to or trivial aliases of a base name (`Foo`), replace references to them with the base name and remove the numbered exports.
+
+5. Preserve Semantics & Comments
+   - Do not change property names, optional/required status, or union members (unless strictly required by Rule 2).
+   - Preserve all JSDoc comments that explain the meaning of types or properties.
+
+6. Reorder for Readability
+   - Organize the exports in this conceptual order:
+     1. **Root Model**: `SwellContent` (or the main entry point).
+     2. **Core Definitions**: `Field`, `View`, `FieldType`, `CoreFieldType`.
+     3. **Component Parts**.
+     4. **Base & Helpers**: `ContentFieldBase`, `QueryExpression`.
+
+7. Output Constraints
+   - The result must be valid TypeScript.
+   - Do not include explanations or markdown formatting outside the result tags.
+   - Output only the cleaned .d.ts content inside <result></result> tags.
+
+Now apply these rules to the following TypeScript declarations and output the rewritten file.
+
+<d.ts></d.ts>

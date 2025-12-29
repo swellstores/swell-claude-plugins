@@ -1,0 +1,329 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://json.swell.store/setting.json",
+  "title": "Swell Setting Section",
+  "description": "Schema definition for application settings in Swell",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional reference to the JSON schema for validation and intellisense."
+    },
+    "label": {
+      "type": "string",
+      "description": "Plural label for this content model shown in the dashboard (e.g. 'Reviews')."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable summary explaining the purpose of this content model."
+    },
+    "fields": {
+      "type": "array",
+      "description": "Content fields and layout elements applied to each record in the collection. Order controls how fields appear in the dashboard.",
+      "items": {
+        "$ref": "#/$defs/Field"
+      }
+    }
+  },
+  "required": [
+    "fields"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "QueryExpression": {
+      "type": "object",
+      "description": "Query-style expression used for conditions and tab filters. Supports standard query properties like 'where' (filter object with query operators), 'limit' (max results), and 'sort' (sort directive like 'name asc'). Also supports direct field filters (e.g. { \"status\": \"active\", \"$settings.enabled\": true }).",
+      "additionalProperties": true
+    },
+    "ConditionExpression": {
+      "$ref": "#/$defs/QueryExpression"
+    },
+    "ContentFieldBase": {
+      "type": "object",
+      "description": "Base properties common to all content field types.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Human-friendly label displayed in the admin UI."
+        },
+        "description": {
+          "type": "string",
+          "description": "Short explanation of the field's purpose, shown as help text."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "When true, the field value is required when editing records."
+        },
+        "readonly": {
+          "type": "boolean",
+          "description": "Prevents manual editing in the dashboard."
+        },
+        "public": {
+          "type": "boolean",
+          "description": "Grants public storefront API access to this specific field."
+        },
+        "private": {
+          "type": "boolean",
+          "description": "Restricts this field from public API access."
+        },
+        "ui": {
+          "type": "string",
+          "description": "UI style or variant for this field (e.g. 'rich_text', 'phone', 'currency', 'slider', 'toggle')."
+        },
+        "placeholder": {
+          "type": "string",
+          "description": "Optional placeholder text shown in the input."
+        }
+      }
+    },
+    "FieldOption": {
+      "type": "object",
+      "description": "Selectable option used by select-style fields.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Human-friendly label shown in the dashboard."
+        },
+        "value": {
+          "description": "Internal value stored when this option is selected.",
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "CoreFieldType": {
+      "type": "string",
+      "enum": [
+        "short_text",
+        "long_text",
+        "boolean",
+        "select",
+        "number",
+        "date",
+        "asset",
+        "tags",
+        "color",
+        "icon",
+        "collection",
+        "field_group",
+        "field_row"
+      ],
+      "description": "Core content field types that control the underlying data shape."
+    },
+    "AliasFieldType": {
+      "type": "string",
+      "enum": [
+        "text",
+        "textarea",
+        "rich_text",
+        "checkbox",
+        "checkboxes",
+        "toggle",
+        "radio",
+        "dropdown",
+        "integer",
+        "float",
+        "currency",
+        "percent",
+        "slider",
+        "time",
+        "datetime",
+        "phone",
+        "email",
+        "url",
+        "slug",
+        "html",
+        "basic_html",
+        "rich_html",
+        "markdown",
+        "liquid",
+        "image",
+        "document",
+        "video"
+      ],
+      "description": "Alias field types exposed in the dashboard UI with preset defaults."
+    },
+    "FieldType": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/CoreFieldType"
+        },
+        {
+          "$ref": "#/$defs/AliasFieldType"
+        }
+      ],
+      "description": "Content field type or layout type."
+    },
+    "Field": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ContentFieldBase"
+        },
+        {
+          "type": "object",
+          "description": "Content field configuration or layout element.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Identifier of the field. Required for data-bearing fields."
+            },
+            "type": {
+              "$ref": "#/$defs/FieldType"
+            },
+            "value_type": {
+              "type": "string",
+              "description": "Optional override for the underlying data type."
+            },
+            "fallback": {
+              "type": "boolean",
+              "description": "Marks this field as a fallback value."
+            },
+            "default": {
+              "description": "Default value for the field or Liquid template.",
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "object"
+                },
+                {
+                  "type": "array"
+                }
+              ]
+            },
+            "conditions": {
+              "$ref": "#/$defs/ConditionExpression"
+            },
+            "root": {
+              "description": "Object path in the underlying model where this field is stored.",
+              "type": [
+                "string",
+                "boolean"
+              ]
+            },
+            "admin_span": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4,
+              "description": "Number of columns (1-4) this field should span in the admin grid."
+            },
+            "multi": {
+              "type": "boolean",
+              "description": "For select-style fields, indicates that multiple values may be selected."
+            },
+            "unique": {
+              "description": "When true, enforces uniqueness across the collection. When a string, enforces uniqueness within the scope of the specified field (e.g. 'parent_id').",
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "min": {
+              "type": "number",
+              "description": "Minimum allowed numeric value or length."
+            },
+            "max": {
+              "type": "number",
+              "description": "Maximum allowed numeric value or length."
+            },
+            "digits": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "For number fields, number of decimal digits to round to."
+            },
+            "increment": {
+              "type": "number",
+              "description": "For slider fields, the step increment."
+            },
+            "localized": {
+              "type": "boolean",
+              "description": "When true, indicates that the value can be localized."
+            },
+            "unit": {
+              "type": "string",
+              "description": "Optional unit label for numeric values (e.g. '%', 'kg')."
+            },
+            "enum": {
+              "type": "array",
+              "description": "Optional list of allowed values.",
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean",
+                  "null"
+                ]
+              }
+            },
+            "asset_types": {
+              "type": "array",
+              "description": "Allowed asset types for file uploads (e.g. ['image', 'video']).",
+              "items": {
+                "type": "string"
+              }
+            },
+            "item_label": {
+              "type": "string",
+              "description": "For collection fields, the id of the nested field used as the row label."
+            },
+            "icon": {
+              "type": "string",
+              "description": "For collection fields, optional icon identifier."
+            },
+            "options": {
+              "type": "array",
+              "description": "Available options for select-style fields.",
+              "items": {
+                "$ref": "#/$defs/FieldOption"
+              }
+            },
+            "$locale": {
+              "type": "string",
+              "description": "Optional locale override. [PLATFORM_INFERRED]"
+            },
+            "$currency": {
+              "type": "string",
+              "description": "Optional currency override. [PLATFORM_INFERRED]"
+            },
+            "query": {
+              "$ref": "#/$defs/QueryExpression"
+            },
+            "formula": {
+              "type": "string",
+              "description": "Formula expression for computed fields (e.g. 'like_count - dislike_count')."
+            },
+            "fields": {
+              "type": "array",
+              "description": "Nested fields for collection, field_group, or field_row types.",
+              "items": {
+                "$ref": "#/$defs/Field"
+              }
+            }
+          },
+          "required": [
+            "type"
+          ]
+        }
+      ]
+    }
+  }
+}

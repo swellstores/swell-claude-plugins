@@ -1,0 +1,366 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://json.swell.store/content-field-guards.json",
+  "title": "Content field cross-guards",
+  "description": "Cross-field guards for content Field definitions, applied on top of content.schema.json.",
+  "$defs": {
+    "LayoutFieldType": {
+      "type": "string",
+      "enum": ["field_group", "field_row"],
+      "description": "Layout-only field types that do not directly store data and may omit an 'id'."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "fields": {
+            "type": "array"
+          }
+        },
+        "required": ["fields"]
+      },
+      "then": {
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "enum": [
+              "collection",
+              "child_collection",
+              "field_group",
+              "field_row"
+            ],
+            "description": "When 'fields' is defined, type must be one of 'collection', 'child_collection', 'field_group', or 'field_row'."
+          }
+        },
+        "errorMessage": "When 'fields' is present, 'type' must be one of: collection, child_collection, field_group, field_row."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "field_row"
+          }
+        },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["fields"],
+        "errorMessage": "Layout fields with type 'field_row' must define nested 'fields'."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "field_group"
+          }
+        },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["fields"],
+        "errorMessage": "Layout fields with type 'field_group' must define nested 'fields'."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "type": {
+            "const": "child_collection"
+          }
+        },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["fields"],
+        "errorMessage": "Fields with type 'child_collection' must define nested 'fields' for child records."
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "required": ["type"]
+          },
+          {
+            "not": {
+              "properties": {
+                "type": {
+                  "$ref": "#/$defs/LayoutFieldType"
+                }
+              },
+              "required": ["type"]
+            }
+          }
+        ]
+      },
+      "then": {
+        "required": ["id"],
+        "errorMessage": "Data-bearing content fields (all types except layout-only 'field_group' and 'field_row') must define an 'id'."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "multi": {
+            "type": "boolean"
+          }
+        },
+        "required": ["multi"]
+      },
+      "then": {
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "enum": [
+              "select",
+              "checkboxes",
+              "radio",
+              "dropdown",
+              "asset",
+              "image",
+              "tags"
+            ]
+          }
+        },
+        "errorMessage": "The 'multi' property is only supported on select-style and asset fields."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "asset_types": {
+            "type": "array"
+          }
+        },
+        "required": ["asset_types"]
+      },
+      "then": {
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "enum": ["asset", "image", "document", "video"]
+          }
+        },
+        "errorMessage": "The 'asset_types' property is only valid for asset-style fields."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "digits": {
+            "type": "integer"
+          }
+        },
+        "required": ["digits"]
+      },
+      "then": {
+        "properties": {
+          "type": {
+            "enum": ["number", "integer", "float", "currency", "percent"]
+          }
+        },
+        "errorMessage": "The 'digits' property is only supported on number-style fields."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": ["unit"]
+      },
+      "then": {
+        "properties": {
+          "type": {
+            "enum": ["number", "integer", "float", "percent", "slider"]
+          }
+        },
+        "errorMessage": "The 'unit' property is only supported on number-style fields."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "increment": {
+            "type": "number"
+          }
+        },
+        "required": ["increment"]
+      },
+      "then": {
+        "properties": {
+          "type": {
+            "enum": ["number", "slider"]
+          }
+        },
+        "errorMessage": "The 'increment' property is only supported on slider or number fields."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "model": {
+            "type": "string"
+          }
+        },
+        "required": ["model"]
+      },
+      "then": {
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "enum": [
+              "lookup",
+              "product_lookup",
+              "variant_lookup",
+              "category_lookup",
+              "customer_lookup"
+            ]
+          }
+        },
+        "errorMessage": "The 'model' property is only valid for lookup-style fields."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": ["key"]
+      },
+      "then": {
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "enum": [
+              "lookup",
+              "product_lookup",
+              "variant_lookup",
+              "category_lookup",
+              "customer_lookup"
+            ]
+          }
+        },
+        "errorMessage": "The 'key' property is only valid for lookup-style fields."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "key_field": {
+            "type": "string"
+          }
+        },
+        "required": ["key_field"]
+      },
+      "then": {
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "enum": [
+              "lookup",
+              "product_lookup",
+              "variant_lookup",
+              "category_lookup",
+              "customer_lookup"
+            ]
+          }
+        },
+        "errorMessage": "The 'key_field' property is only valid for lookup-style fields."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "limit": {
+            "type": "integer"
+          }
+        },
+        "required": ["limit"]
+      },
+      "then": {
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "enum": [
+              "lookup",
+              "product_lookup",
+              "variant_lookup",
+              "category_lookup",
+              "customer_lookup"
+            ]
+          }
+        },
+        "errorMessage": "The 'limit' property is only valid for lookup-style fields."
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "type": {
+                "const": "collection"
+              }
+            },
+            "required": ["type"]
+          },
+          {
+            "not": {
+              "required": ["collection"]
+            }
+          }
+        ]
+      },
+      "then": {
+        "required": ["fields"],
+        "errorMessage": "Fields with type 'collection' that do not link to another collection must define nested 'fields' for inline child records."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "item_label": {
+            "type": "string"
+          }
+        },
+        "required": ["item_label"]
+      },
+      "then": {
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "enum": ["collection", "child_collection"]
+          }
+        },
+        "errorMessage": "The 'item_label' property is only valid for collection or child_collection fields."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "icon": {
+            "type": "string"
+          }
+        },
+        "required": ["icon"]
+      },
+      "then": {
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "enum": ["collection", "child_collection"]
+          }
+        },
+        "errorMessage": "The 'icon' property is only valid for collection or child_collection fields."
+      }
+    }
+  ]
+}

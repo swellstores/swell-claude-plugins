@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://json.swell.store/webhook.json",
+  "title": "Swell Webhook",
+  "description": "Schema for configuring webhooks in Swell applications. Webhooks subscribe to model events and update external services with event data.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional reference to the JSON schema for validation and intellisense."
+    },
+    "id": {
+      "type": "string",
+      "description": "The unique identifier for the webhook. [PLATFORM_INFERRED]"
+    },
+    "alias": {
+      "type": "string",
+      "description": "Alias used to refer to the webhook configuration."
+    },
+    "description": {
+      "type": "string",
+      "description": "A brief description of the webhook's purpose."
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Your application's webhook endpoint URL. For authentication, API secrets can be included directly in the URL and validated when requests are received from Swell."
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "description": "Array of event types to trigger this webhook. Events follow the format 'model.action' (e.g., 'product.created', 'payment.succeeded', 'payment.failed').",
+      "examples": [
+        [
+          "product.created"
+        ],
+        [
+          "payment.succeeded",
+          "payment.failed"
+        ]
+      ]
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Indicates whether the webhook is enabled. When disabled, events will not be sent to the endpoint."
+    },
+    "auto_disabled": {
+      "type": "boolean",
+      "description": "Indicates whether the webhook was automatically disabled. This occurs seven days after the first failed attempt and no subsequent successes. [PLATFORM_INFERRED]"
+    },
+    "retry_disabled_events": {
+      "type": "boolean",
+      "description": "Determines whether the webhook retries disabled events."
+    },
+    "attempts_failed": {
+      "type": "integer",
+      "description": "Displays the number of failed webhook attempts."
+    },
+    "date_first_failed": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The date of the webhook's first failed attempt. [PLATFORM_INFERRED]"
+    },
+    "date_last_warned": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The date of the last warning for a failed attempt. [PLATFORM_INFERRED]"
+    },
+    "date_final_attempt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The final attempt for a webhook after continuous failed attempts. Webhooks are disabled 7 days after the first failed attempt."
+    },
+    "schedule": {
+      "type": "object",
+      "description": "Schedule for specifying when a webhook is to be fired.",
+      "properties": {
+        "hour": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23,
+          "description": "The hour for which to fire the webhook."
+        },
+        "month_day": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 31,
+          "description": "The day of the month for which to fire the webhook."
+        },
+        "month": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12,
+          "description": "The month for which to fire the webhook."
+        },
+        "week_day": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6,
+          "description": "The day of the week for which to fire the webhook."
+        }
+      },
+      "additionalProperties": false
+    },
+    "date_scheduled": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Date for which the webhook is scheduled to fire."
+    },
+    "date_created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The date the webhook was created. [PLATFORM_INFERRED]"
+    },
+    "date_updated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The date the webhook was last updated. [PLATFORM_INFERRED]"
+    }
+  },
+  "required": [
+    "url",
+    "events"
+  ],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "description": "Send payment updates to Acme's aggregation pipeline",
+      "url": "https://example.com/handle-payments",
+      "events": [
+        "payment.succeeded",
+        "payment.failed"
+      ]
+    }
+  ]
+}

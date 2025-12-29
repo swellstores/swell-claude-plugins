@@ -1,0 +1,36 @@
+You are post‑processing a TypeScript declaration file generated from JSON Schema. The d.ts file provided in <d.ts></d.ts> tags. Rewrite the declarations to make them cleaner and more LLM‑friendly, without changing the actual shapes of the types.
+
+Apply these generic rules:
+
+1. Remove obviously artificial helper intersections
+   - If an exported union type is defined as an intersection with a very loose helper (e.g. { [k: string]: unknown } or a type whose only purpose is to approximate validation logic), remove that helper from the public
+     alias.
+   - Update nested usages accordingly so they refer directly to the main union type, not to extra helper aliases.
+2. Collapse numbered variants
+   - If you see exported types or interfaces whose names end with digits (e.g. Foo1, Foo2) and which:
+     - are structurally identical to a base name (e.g. Foo), or
+     - are trivial aliases of that base,
+       then:
+     - Replace all references to the numbered names with the base name.
+     - Remove the redundant numbered export declarations.
+   - When deciding which name is the “base”, prefer the shortest, most readable name without trailing digits.
+3. Preserve semantics and useful comments
+   - Do not change property names, types, optional/required status, or union members.
+   - Preserve all JSDoc comments that explain the meaning of types or properties.
+   - When collapsing duplicates, keep the most informative description on the surviving declaration.
+4. Reorder exports for readability
+   - Keep header/file‑level comments at the top.
+   - Then order exported types/interfaces roughly by “conceptual level”:
+     1. Entry‑point types that represent the whole document or main schema (e.g. names ending with Model, Schema, Config, or the type that most other types reference).
+     2. Core base types and discriminated unions (e.g. Base*, *Base, or main union types).
+     3. Concrete variants/subtypes used in those unions.
+     4. Cross‑cutting helpers (validation rules, event types, query types, permissions types, etc.).
+     5. Low‑level utility or leaf types.
+   - Within each group, prefer an order where dependencies appear before the types that depend on them, when that is easy to see. Otherwise, keep the original relative order.
+5. Output constraints
+   - The resulting file must be valid TypeScript and compile if imported.
+   - Do not add explanations or commentary; output only the cleaned .d.ts content in <result></result> tag.
+
+Now apply these rules to the following TypeScript declarations and output the rewritten file.
+
+<d.ts></d.ts>

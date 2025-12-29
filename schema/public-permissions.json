@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://json.swell.store/public-permissions.json",
+  "title": "SwellPublicPermissions",
+  "type": "object",
+  "description": "Restricts which fields and operations are allowed through the unauthenticated storefront API when `public` is false or omitted.",
+  "properties": {
+    "scope": {
+      "type": "string",
+      "enum": ["account"],
+      "description": "Optional scope limit. Use `account` to require the caller to be an authenticated customer."
+    },
+    "fields": {
+      "type": "array",
+      "description": "Whitelist of fields that are readable through the public API.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "query": {
+      "$ref": "query.json"
+    },
+    "expands": {
+      "type": "object",
+      "description": "Custom expansion URLs for link fields in public API responses. Keys are field names, values define the URL pattern (e.g. {'product': {'url': '/products/{product_id}'}}).",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "URL pattern for expanding the link, with field interpolation (e.g. '/products/{product_id}')."
+          }
+        },
+        "required": ["url"]
+      }
+    },
+    "input": {
+      "type": "object",
+      "description": "Controls which fields can be modified via the public API (e.g. when customers submit forms).",
+      "properties": {
+        "scope": {
+          "type": "string",
+          "enum": ["account"],
+          "description": "Restrict write access to authenticated customers."
+        },
+        "fields": {
+          "type": "array",
+          "description": "List of fields that may be written by the public endpoint.",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

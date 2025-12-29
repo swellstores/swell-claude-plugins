@@ -1,0 +1,13 @@
+{
+  "name": "swell",
+  "owner": {
+    "name": "Swell Team",
+    "email": "hi@swell.is"
+  },
+  "plugins": [
+    {
+      "name": "swell-app",
+      "source": "./swell-app"
+    }
+  ]
+}

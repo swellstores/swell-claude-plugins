@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://json.swell.store/searches.json",
+  "title": "SwellSearches",
+  "type": "array",
+  "description": "Search presets for admin UI and API helpers. Each entry can whitelist fields to search across, define a default query, or proxy to another model by a foreign key.",
+  "items": {
+    "type": "object",
+    "title": "Search Definition",
+    "properties": {
+      "id": {
+        "type": "string",
+        "description": "Identifier for the search preset (e.g. 'default', 'product'). Used by UI and APIs to reference this preset."
+      },
+      "label": {
+        "type": "string",
+        "description": "Human-readable label for this search (shown in admin)."
+      },
+      "description": {
+        "type": "string",
+        "description": "Optional help text explaining the purpose of this search."
+      },
+      "fields": {
+        "type": "array",
+        "description": "List of fields to include in free-text search. Order can influence relevance in some tools.",
+        "items": { "type": "string" }
+      },
+      "query": {
+        "$ref": "query.json"
+      },
+      "proxy": {
+        "type": "object",
+        "description": "Proxy search to a related model using a foreign key. Useful for jumping from one model to records in another model related by `key`.",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "Target model to proxy to (e.g. 'products')."
+          },
+          "key": {
+            "type": "string",
+            "description": "Foreign key field in the current model that references the target model's id."
+          }
+        },
+        "required": ["model", "key"],
+        "additionalProperties": true
+      }
+    },
+    "required": ["id"],
+    "examples": [
+      {
+        "id": "default",
+        "fields": ["name", "sku", "supplier_code"]
+      },
+      {
+        "id": "product",
+        "proxy": { "model": "products", "key": "product_id" }
+      }
+    ]
+  }
+}

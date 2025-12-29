@@ -1,0 +1,863 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://json.swell.store/model.json",
+  "title": "Swell Data Model ",
+  "description": "Defines the structure, validation, and behavior of a collection in Swell.\n\n NAMING CONVENTION: Model name and namespace are derived from the filename (stem):\n  • 'products.json' → name: 'products', namespace: null\n  • 'my_custom_models.json' → namespace: 'my', name: 'custom_models' (splits on FIRST underscore only).",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional reference to the JSON schema for validation and intellisense."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable summary explaining the purpose of this collection."
+    },
+    "fields": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Field definitions keyed by field name. Each field configures storage type, validation rules, and presentation. At least one field is required.",
+      "additionalProperties": {
+        "$ref": "#/$defs/field"
+      }
+    },
+    "label": {
+      "type": "string",
+      "description": "Plural label shown in admin UI (e.g. 'Products'). Defaults to humanized model name; override only when automatic capitalization is insufficient."
+    },
+    "name_field": {
+      "type": "string",
+      "description": "Field used as the default record label. Defaults to model name, otherwise the primary field."
+    },
+    "name_pattern": {
+      "type": "string",
+      "description": "Template for generating record labels using field interpolation (e.g. '{name} - {sku}'). Can reference nested fields (e.g. '{parent.name}'). When defined, overrides `name_field`.",
+      "examples": ["{name} - {sku}", "{supplier.name} - {sku}", "{parent.name}"]
+    },
+    "primary_field": {
+      "type": "string",
+      "description": "Primary lookup field for record identification. Defaults to 'id' when omitted."
+    },
+    "secondary_field": {
+      "type": "string",
+      "description": "Optional secondary lookup field for alternative record retrieval (e.g. 'slug', 'sku')."
+    },
+    "public": {
+      "type": "boolean",
+      "description": "When true, makes the entire collection and all fields publicly readable via storefront API without authentication. Only enable when all data is safe for public access."
+    },
+    "public_permissions": {
+      "$ref": "public-permissions.json"
+    },
+    "single": {
+      "type": "boolean",
+      "description": "When true, the model represents a singleton record (like site settings) instead of a collection. API endpoints return a single object instead of arrays."
+    },
+    "abstract": {
+      "type": "boolean",
+      "description": "Marks the model as a base definition for inheritance only—cannot be instantiated directly. Typically set by platform for base models."
+    },
+    "events": {
+      "$ref": "#/$defs/events"
+    },
+    "searches": {
+      "$ref": "searches.json"
+    },
+    "query": {
+      "$ref": "query.json"
+    }
+  },
+  "required": ["fields"],
+  "additionalProperties": true,
+  "$defs": {
+    "FieldBase": {
+      "type": "object",
+      "description": "Base properties common to all field types.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Human-friendly label displayed in admin UI. Defaults to humanized field name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Short explanation of the field's purpose and usage, shown as help text in admin UI."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "When true, API rejects create/update operations if this field is undefined or null. Use for critical data."
+        },
+        "readonly": {
+          "type": "boolean",
+          "description": "Prevents manual updates after initial creation. Formula fields can still modify the value automatically."
+        },
+        "deprecated": {
+          "type": "boolean",
+          "description": "Marks the field as deprecated. Keep for backward compatibility but avoid in new records."
+        },
+        "alias": {
+          "type": "string",
+          "description": "Alternative field name accepted in API payloads for backward compatibility."
+        },
+        "public": {
+          "type": "boolean",
+          "description": "Grants public storefront API access to this specific field, even when model-level `public` is false."
+        },
+        "private": {
+          "type": "boolean",
+          "description": "Restricts field from public API access. Opposite of `public`. Use for sensitive data like internal flags or admin-only fields."
+        }
+      }
+    },
+    "StringField": {
+      "title": "StringField",
+      "allOf": [
+        { "$ref": "#/$defs/FieldBase" },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "string" },
+            "default": {
+              "description": "Default value automatically applied when field is undefined on create/update. Can be a static string or an object with $formula property for dynamic defaults (e.g. {$formula: 'upper(code)'}).",
+              "oneOf": [
+                { "type": "string" },
+                {
+                  "type": "object",
+                  "properties": { "$formula": { "type": "string" } },
+                  "required": ["$formula"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "enum": {
+              "type": "array",
+              "description": "Restrict field to specific allowed string values (e.g., ['draft', 'active', 'archived']).",
+              "items": { "type": "string" }
+            },
+            "format": {
+              "type": "string",
+              "enum": [
+                "uppercase",
+                "lowercase",
+                "underscore",
+                "slug",
+                "slugid",
+                "currency-code",
+                "url",
+                "email",
+                "semver",
+                "password"
+              ],
+              "description": "Automatic formatting applied on save. 'password' hashes with bcrypt. 'slug' converts to URL-safe format. 'email' normalizes addresses."
+            },
+            "length": { "type": "integer", "minimum": 0 },
+            "minlength": { "type": "integer", "minimum": 0 },
+            "maxlength": { "type": "integer", "minimum": 0 },
+            "unique": {
+              "oneOf": [
+                { "type": "boolean" },
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "string" }
+              ],
+              "description": "Create composite uniqueness constraint. Current field is ALWAYS included: `true` for global uniqueness; `\"parent_id\"` creates [field, parent_id] constraint (unique per parent); `[\"account_id\", \"type\"]` creates [field, account_id, type] constraint. Use for scoped uniqueness in nested collections."
+            },
+            "auto": {
+              "oneOf": [
+                { "type": "boolean" },
+                { "type": "string", "enum": ["insert"] }
+              ]
+            },
+            "increment": { "$ref": "#/$defs/increment" },
+            "formula": {
+              "type": "string",
+              "description": "Expression to compute field value on create/update (e.g., 'upper(code)'). If result is undefined, field becomes undefined."
+            },
+            "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } }
+          },
+          "examples": [
+            { "type": "string", "format": "slug", "unique": true },
+            {
+              "type": "string",
+              "label": "Status",
+              "enum": ["draft", "active", "archived"],
+              "default": "draft"
+            },
+            { "type": "string", "format": "uppercase" },
+            { "type": "string", "formula": "upper(code)" },
+            {
+              "type": "string",
+              "auto": true,
+              "increment": { "pattern": "ORDER-{0000}" }
+            }
+          ]
+        }
+      ]
+    },
+    "IntField": {
+      "title": "IntField",
+      "allOf": [
+        { "$ref": "#/$defs/FieldBase" },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "int" },
+            "default": {
+              "description": "Default integer value applied when undefined. Can be a static integer or an object with $formula property.",
+              "oneOf": [
+                { "type": "integer" },
+                {
+                  "type": "object",
+                  "properties": { "$formula": { "type": "string" } },
+                  "required": ["$formula"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "min": { "type": "integer" },
+            "max": { "type": "integer" },
+            "enum": { "type": "array", "items": { "type": "integer" } },
+            "auto": { "type": "boolean" },
+            "increment": { "$ref": "#/$defs/increment" },
+            "formula": {
+              "type": "string",
+              "description": "Expression to compute field value on create/update (e.g., 'round(total / count)'). If result is undefined, field becomes undefined."
+            },
+            "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } },
+            "unique": {
+              "oneOf": [
+                { "type": "boolean" },
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "string" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "FloatField": {
+      "title": "FloatField",
+      "allOf": [
+        { "$ref": "#/$defs/FieldBase" },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "float" },
+            "default": {
+              "description": "Default float value applied when undefined. Can be a static number or an object with $formula property.",
+              "oneOf": [
+                { "type": "number" },
+                {
+                  "type": "object",
+                  "properties": { "$formula": { "type": "string" } },
+                  "required": ["$formula"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "min": { "type": "number" },
+            "max": { "type": "number" },
+            "scale": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Decimal precision retained (e.g., 2 for currency)."
+            },
+            "formula": {
+              "type": "string",
+              "description": "Expression to compute field value on create/update (e.g., 'round(price * 1.1, 2)'). If result is undefined, field becomes undefined."
+            },
+            "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } }
+          }
+        }
+      ]
+    },
+    "BoolField": {
+      "title": "BoolField",
+      "allOf": [
+        { "$ref": "#/$defs/FieldBase" },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "bool" },
+            "default": {
+              "description": "Default boolean value applied when undefined. Can be a static boolean or an object with $formula property.",
+              "oneOf": [
+                { "type": "boolean" },
+                {
+                  "type": "object",
+                  "properties": { "$formula": { "type": "string" } },
+                  "required": ["$formula"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "formula": { "type": "string" },
+            "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } }
+          }
+        }
+      ]
+    },
+    "DateField": {
+      "title": "DateField",
+      "allOf": [
+        { "$ref": "#/$defs/FieldBase" },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "date" },
+            "default": {
+              "description": "Default date value applied when undefined. Accepts ISO 8601 string, epoch milliseconds as integer, or a { $formula } object.",
+              "oneOf": [
+                { "type": "string" },
+                { "type": "integer" },
+                {
+                  "type": "object",
+                  "properties": { "$formula": { "type": "string" } },
+                  "required": ["$formula"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "auto": {
+              "oneOf": [
+                { "type": "boolean" },
+                { "type": "string", "enum": ["insert", "update"] }
+              ],
+              "description": "Auto Timestamp: true/'insert' sets once on creation; 'update' refreshes on every update."
+            },
+            "formula": {
+              "type": "string",
+              "description": "Expression to compute date value (e.g., 'now()', 'date_start + 86400000'). If result is undefined, field becomes undefined."
+            },
+            "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } }
+          },
+          "examples": [
+            { "type": "date", "auto": true },
+            { "type": "date", "auto": "update" },
+            {
+              "type": "date",
+              "rules": [
+                {
+                  "expression": "and(date_start, date_end, date_end <= date_start)",
+                  "error": "Must occur after Start Date"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "CurrencyField": {
+      "title": "CurrencyField",
+      "allOf": [
+        { "$ref": "#/$defs/FieldBase" },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "currency" },
+            "default": {
+              "description": "Default currency amount. Can be a static number or a { $formula } object.",
+              "oneOf": [
+                { "type": "number" },
+                {
+                  "type": "object",
+                  "properties": { "$formula": { "type": "string" } },
+                  "required": ["$formula"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "min": {
+              "type": "number",
+              "description": "Minimum allowed value."
+            },
+            "max": {
+              "type": "number",
+              "description": "Maximum allowed value."
+            },
+            "scale": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Decimal precision (e.g., 2 for USD, 0 for JPY)."
+            },
+            "localized": {
+              "type": "boolean",
+              "description": "Enable per-currency/locale values (region-specific pricing)."
+            },
+            "formula": {
+              "type": "string",
+              "description": "Expression to compute amount (e.g., 'round(price * 1.2, 2)'). If result is undefined, field becomes undefined."
+            },
+            "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } }
+          },
+          "examples": [
+            { "type": "currency", "min": 0, "scale": 2, "localized": true }
+          ]
+        }
+      ]
+    },
+    "ObjectIdField": {
+      "title": "ObjectIdField",
+      "allOf": [
+        { "$ref": "#/$defs/FieldBase" },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "objectid" },
+            "default": {
+              "description": "Default ObjectID value. Typically null or a { $formula } object; static strings allowed for system-generated IDs.",
+              "oneOf": [
+                { "type": "string" },
+                { "type": "null" },
+                {
+                  "type": "object",
+                  "properties": { "$formula": { "type": "string" } },
+                  "required": ["$formula"],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "auto": {
+              "type": "boolean",
+              "description": "Auto-generate unique ID on creation."
+            },
+            "immutable": {
+              "type": "boolean",
+              "description": "Prevent changes after creation (stricter than readonly)."
+            },
+            "unique": {
+              "oneOf": [
+                { "type": "boolean" },
+                { "type": "array", "items": { "type": "string" } },
+                { "type": "string" }
+              ],
+              "description": "Composite uniqueness. true = globally unique; 'parent_id' => [field,parent_id]; ['account_id','type'] => [field,account_id,type]."
+            },
+            "formula": {
+              "type": "string",
+              "description": "Expression to compute value; rarely used for IDs."
+            },
+            "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } }
+          },
+          "examples": [
+            { "type": "objectid", "auto": true },
+            { "type": "objectid", "immutable": true },
+            { "type": "objectid", "unique": ["account_id"] }
+          ]
+        }
+      ]
+    },
+    "ArrayField": {
+      "title": "ArrayField",
+      "allOf": [
+        { "$ref": "#/$defs/FieldBase" },
+        {
+          "type": "object",
+          "required": ["type", "value_type"],
+          "properties": {
+            "type": { "const": "array" },
+            "value_type": {
+              "type": "string",
+              "enum": [
+                "string",
+                "int",
+                "float",
+                "bool",
+                "date",
+                "currency",
+                "objectid",
+                "object",
+                "file",
+                "filedata",
+                "link"
+              ],
+              "description": "Defines the type of items in the array. Use 'object' for structured items; not compatible with 'collection' or 'record'."
+            },
+            "fields": {
+              "type": "object",
+              "description": "Required when value_type is 'object'. Defines the nested schema of each object item.",
+              "additionalProperties": { "$ref": "#/$defs/field" }
+            },
+            "sort": {
+              "type": "string",
+              "enum": ["asc", "desc"],
+              "description": "Automatically sort array items ascending or descending."
+            },
+            "extends": {
+              "type": "string",
+              "description": "Inherit configuration from another top-level field name."
+            },
+            "default": { "description": "Default array value." },
+            "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } }
+          },
+          "examples": [
+            {
+              "type": "array",
+              "value_type": "object",
+              "fields": {
+                "product_id": { "type": "objectid" },
+                "quantity": { "type": "int", "min": 1 }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "ObjectField": {
+      "title": "ObjectField",
+      "allOf": [
+        { "$ref": "#/$defs/FieldBase" },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "object" },
+            "fields": {
+              "type": "object",
+              "description": "Nested field definitions for the object. Keys are field names; values follow the Field schema.",
+              "additionalProperties": { "$ref": "#/$defs/field" }
+            },
+            "object_types": {
+              "type": "object",
+              "description": "Optional polymorphism: provide per-type field overrides. Keys are type identifiers matched against a 'type' field within this object.",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "fields": {
+                    "type": "object",
+                    "additionalProperties": { "$ref": "#/$defs/field" }
+                  }
+                }
+              }
+            },
+            "extends": {
+              "type": "string",
+              "description": "Inherit fields from another top-level field."
+            },
+            "default": { "description": "Default object value." },
+            "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } }
+          },
+          "examples": [
+            {
+              "type": "object",
+              "fields": {
+                "type": { "type": "string", "enum": ["shipping", "billing"] }
+              },
+              "object_types": {
+                "shipping": {
+                  "fields": {
+                    "required_date": { "type": "date", "required": true }
+                  }
+                },
+                "billing": {
+                  "fields": { "tax_id": { "type": "string", "required": true } }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "CollectionField": {
+      "title": "CollectionField",
+      "allOf": [
+        { "$ref": "#/$defs/FieldBase" },
+        {
+          "type": "object",
+          "required": ["type", "fields"],
+          "properties": {
+            "type": { "const": "collection" },
+            "fields": {
+              "type": "object",
+              "description": "Field definitions for records in the nested collection. Uses the same Field schema as top-level fields.",
+              "minProperties": 1,
+              "additionalProperties": { "$ref": "#/$defs/field" }
+            },
+            "label": {
+              "type": "string",
+              "description": "Singular label for nested collection records (e.g. 'Comment')."
+            },
+            "plural": {
+              "type": "string",
+              "description": "Plural label for the nested collection (e.g. 'Comments')."
+            },
+            "name_pattern": {
+              "type": "string",
+              "description": "Template for generating nested record labels (e.g. '{nickname}')."
+            },
+            "events": {
+              "$ref": "#/$defs/events",
+              "description": "Event definitions for nested collection lifecycle."
+            },
+            "searches": {
+              "$ref": "searches.json",
+              "description": "Search configuration for nested collection records."
+            },
+            "query": {
+              "$ref": "query.json"
+            },
+            "public": {
+              "type": "boolean",
+              "description": "When true, makes this nested collection publicly accessible."
+            },
+            "public_permissions": {
+              "$ref": "public-permissions.json",
+              "description": "Public API access control for the nested collection."
+            }
+          }
+        }
+      ]
+    },
+    "LinkField": {
+      "title": "LinkField",
+      "allOf": [
+        { "$ref": "#/$defs/FieldBase" },
+        {
+          "type": "object",
+          "oneOf": [
+            {
+              "required": ["type", "model"],
+              "not": { "required": ["url"] },
+              "properties": {
+                "type": { "const": "link" },
+                "model": {
+                  "type": "string",
+                  "description": "Target model (e.g., 'products', 'accounts'). Can include nested syntax like 'products:variants'."
+                },
+                "key": {
+                  "type": "string",
+                  "description": "Foreign key field in this model that stores the target record id (e.g., 'product_id')."
+                },
+                "value_type": {
+                  "type": "string",
+                  "enum": ["collection", "record"],
+                  "description": "Whether this link resolves to a collection or a single record (default 'record')."
+                },
+                "params": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Static/dynamic query parameters. Supports field references (e.g., {'id': {'$in': 'category_ids'}})."
+                }
+              }
+            },
+            {
+              "required": ["type", "url"],
+              "not": { "required": ["model"] },
+              "properties": {
+                "type": { "const": "link" },
+                "url": {
+                  "type": "string",
+                  "description": "Custom URL pattern for link resolution (e.g., '/orders/{order_id}/items/{order_item_id}')."
+                },
+                "key": {
+                  "type": "string",
+                  "description": "Foreign key field in this model that stores the target record id (e.g., 'order_id')."
+                },
+                "value_type": {
+                  "type": "string",
+                  "enum": ["collection", "record"],
+                  "description": "Whether this link resolves to a collection or a single record (default 'record')."
+                },
+                "params": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Static/dynamic query parameters for the resolved URL."
+                }
+              }
+            }
+          ],
+          "examples": [
+            { "type": "link", "model": "accounts", "key": "account_id" },
+            {
+              "type": "link",
+              "url": "/orders/{order_id}/items/{order_item_id}"
+            }
+          ],
+          "errorMessage": "Link fields must specify exactly one of 'model' or 'url', not both or neither."
+        }
+      ]
+    },
+    "FileField": {
+      "title": "FileField",
+      "allOf": [
+        { "$ref": "#/$defs/FieldBase" },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "file" },
+            "default": {},
+            "rules": { "type": "array", "items": { "$ref": "#/$defs/rule" } }
+          }
+        }
+      ]
+    },
+    "FileDataField": {
+      "title": "FileDataField",
+      "allOf": [
+        { "$ref": "#/$defs/FieldBase" },
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "filedata" },
+            "description": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "field": {
+      "title": "Field",
+      "description": "Discriminated union of field definitions by required 'type'.",
+      "oneOf": [
+        { "$ref": "#/$defs/StringField" },
+        { "$ref": "#/$defs/IntField" },
+        { "$ref": "#/$defs/FloatField" },
+        { "$ref": "#/$defs/BoolField" },
+        { "$ref": "#/$defs/DateField" },
+        { "$ref": "#/$defs/CurrencyField" },
+        { "$ref": "#/$defs/ObjectIdField" },
+        { "$ref": "#/$defs/ArrayField" },
+        { "$ref": "#/$defs/ObjectField" },
+        { "$ref": "#/$defs/CollectionField" },
+        { "$ref": "#/$defs/LinkField" },
+        { "$ref": "#/$defs/FileField" },
+        { "$ref": "#/$defs/FileDataField" }
+      ],
+      "allOf": [{ "$ref": "model-field-guards.json" }]
+    },
+    "increment": {
+      "title": "Increment",
+      "type": "object",
+      "description": "Auto-increment configuration for string and int fields when combined with `auto: true`.",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "description": "Starting number for auto-increment sequence (e.g. 1 for 1, 2, 3, ...). Applies globally across the collection."
+        },
+        "pattern": {
+          "type": "string",
+          "description": "For string fields: pattern with numeric placeholder in braces (e.g. 'ORDER-{0000}' produces 'ORDER-0001', 'ORDER-0002', ...). Maintains non-brace characters."
+        }
+      },
+      "additionalProperties": false,
+      "examples": [
+        {
+          "start": 1
+        },
+        {
+          "pattern": "ORDER-{0000}"
+        }
+      ]
+    },
+    "rule": {
+      "title": "Rule",
+      "type": "object",
+      "description": "Conditional validation rule triggered on save. Either `expression` or `conditions` must be provided to define the trigger.",
+      "properties": {
+        "expression": {
+          "type": "string",
+          "description": "Formula expression that triggers the rule when it evaluates to true. Examples: 'and(date_start, date_end, date_end <= date_start)', 'quantity > max_quantity'. Use $record.field to reference existing values during updates. See 'formulas' reference."
+        },
+        "conditions": {
+          "type": "object",
+          "description": "Query-style conditions using Swell operators ($and, $or, etc.). Rule triggers when conditions match the record."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "When rule triggers, make this field required."
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message returned to user when rule triggers (e.g. 'Must occur after Start Date')."
+        }
+      },
+      "additionalProperties": false
+    },
+    "events": {
+      "title": "Events",
+      "type": "object",
+      "description": "Event definitions that trigger HTTP webhooks and Swell function extensions. Events are emitted on record lifecycle actions (create, update, delete) and custom state transitions.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable or disable event emission for this model. When false, no events are triggered for record changes. Defaults to true."
+        },
+        "types": {
+          "oneOf": [
+            {
+              "type": "array",
+              "description": "Array of event type definitions. Each event type creates a distinct event that can trigger webhooks and functions when conditions are met.",
+              "items": {
+                "$ref": "#/$defs/eventType"
+              }
+            },
+            {
+              "type": "null",
+              "description": "Set to null to disable event type definitions (typically used when events.enabled is false)."
+            }
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "eventType": {
+      "title": "EventType",
+      "type": "object",
+      "description": "Definition of a single event type that triggers webhooks and function extensions.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Event identifier (e.g., 'created', 'updated', 'paid'). Combined with model root to form full event name (e.g., 'order.paid'). This name is matched against webhook and function event subscriptions.",
+          "examples": [
+            "created",
+            "updated",
+            "deleted",
+            "paid",
+            "shipped",
+            "approved"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of when this event is triggered. Useful for documentation and admin UI."
+        },
+        "conditions": {
+          "type": "object",
+          "description": "Conditional trigger that determines when the event fires. Two patterns: (1) Formula for state transitions: {'$formula': 'and($record.status != \"approved\", status == \"approved\")'} where $record.field references the previous value and field references the new value. (2) Query operators: {'$and': [{'$record': {...}}, {'$data': {...}}]} for complex matching. When omitted, event triggers on every record change. See 'formulas' and 'query' references.",
+          "additionalProperties": true,
+          "examples": [
+            {
+              "paid": true,
+              "$record": {
+                "paid": {
+                  "$ne": true
+                }
+              }
+            },
+            {
+              "$formula": "and($record.status != 'approved', status == 'approved')"
+            }
+          ]
+        },
+        "fields": {
+          "type": "array",
+          "description": "Subset of field names to include in the event payload. When specified, only these fields are sent to webhooks and functions. When omitted, all fields are included. Useful for limiting sensitive data exposure or reducing payload size.",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            ["id", "name", "status"],
+            ["order_number", "total", "customer_id"]
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

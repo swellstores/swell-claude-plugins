@@ -1,0 +1,8 @@
+{
+    "name": "swell-app",
+    "description": "Helps with Swell apps development",
+    "author": {
+        "name": "Swell Team"
+    },
+    "version": "0.1.0"
+}

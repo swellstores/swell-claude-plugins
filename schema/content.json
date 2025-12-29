@@ -1,0 +1,745 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://json.swell.store/content.json",
+  "title": "Swell Content Model",
+  "description": "Schema definition for Swell content models and their dashboard content views.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional reference to the JSON schema for validation and intellisense."
+    },
+    "collection": {
+      "type": "string",
+      "description": "Name of the collection this content model targets. MUST be the shorthand name within the app scope (e.g. 'suppliers'), NOT the full model address (e.g. 'app/multivendor/suppliers'). For standard collections (like 'products', 'accounts', 'orders') the fields and views defined here augment the existing dashboard pages. For app-defined collections, they create entirely new pages."
+    },
+    "label": {
+      "type": "string",
+      "description": "Plural label for this content model shown in the dashboard (e.g. 'Reviews')."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable summary explaining the purpose of this content model."
+    },
+    "public": {
+      "type": "boolean",
+      "description": "When true, makes collection records readable from the storefront API. Individual fields can also be marked public."
+    },
+    "fields": {
+      "type": "array",
+      "description": "Content fields and layout elements applied to each record in the collection. Order controls how fields appear in the dashboard.",
+      "items": {
+        "$ref": "#/$defs/Field"
+      }
+    },
+    "views": {
+      "type": "array",
+      "description": "Content views describing how this model appears in the dashboard. Standard views use ids 'list' (collection table), 'edit' (edit form), and 'new' (create form). Custom views with any id can be added and appear in a view selector dropdown, enabling multiple layouts per view type.",
+      "items": {
+        "$ref": "#/$defs/View"
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "description": "Aggregate global default values derived from field defaults. [PLATFORM_INFERRED]",
+      "additionalProperties": true,
+      "readOnly": true
+    },
+    "source_type": {
+      "type": "string",
+      "enum": ["app", "custom"],
+      "description": "Indicates the source of the content model. [PLATFORM_INFERRED]",
+      "readOnly": true
+    },
+    "app_id": {
+      "type": "string",
+      "description": "ID of the Swell App that defined this model. [PLATFORM_INFERRED]",
+      "readOnly": true
+    },
+    "source_id": {
+      "type": "string",
+      "description": "Identifier of the source that installed this model. [PLATFORM_INFERRED]",
+      "readOnly": true
+    },
+    "name": {
+      "type": "string",
+      "description": "Internal name of the underlying collection. [PLATFORM_INFERRED]",
+      "readOnly": true
+    },
+    "root": {
+      "description": "Platform-selected root path in the underlying model. [PLATFORM_INFERRED]",
+      "type": ["string", "boolean"],
+      "readOnly": true
+    },
+    "default_root": {
+      "type": "boolean",
+      "description": "Marks the default root used by the platform. [PLATFORM_INFERRED]",
+      "readOnly": true
+    },
+    "id": {
+      "type": "string",
+      "description": "Platform-generated unique identifier for this content model. [PLATFORM_INFERRED]",
+      "readOnly": true
+    },
+    "date_created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Date the content model was created. [PLATFORM_INFERRED]",
+      "readOnly": true
+    },
+    "date_updated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Date the content model was last updated. [PLATFORM_INFERRED]",
+      "readOnly": true
+    }
+  },
+  "required": ["collection", "fields"],
+  "additionalProperties": false,
+  "$defs": {
+    "QueryExpression": {
+      "type": "object",
+      "description": "Query-style expression used for conditions and tab filters. Supports standard query properties like 'where' (filter object with query operators), 'limit' (max results), and 'sort' (sort directive like 'name asc'). Also supports direct field filters (e.g. { \"status\": \"active\", \"$settings.enabled\": true }).",
+      "additionalProperties": true
+    },
+    "ConditionExpression": {
+      "$ref": "#/$defs/QueryExpression"
+    },
+    "ContentFieldBase": {
+      "type": "object",
+      "description": "Base properties common to all content field types.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Human-friendly label displayed in the admin UI."
+        },
+        "description": {
+          "type": "string",
+          "description": "Short explanation of the field's purpose, shown as help text."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "When true, the field value is required when editing records."
+        },
+        "readonly": {
+          "type": "boolean",
+          "description": "Prevents manual editing in the dashboard."
+        },
+        "public": {
+          "type": "boolean",
+          "description": "Grants public storefront API access to this specific field."
+        },
+        "private": {
+          "type": "boolean",
+          "description": "Restricts this field from public API access."
+        },
+        "ui": {
+          "type": "string",
+          "description": "UI style or variant for this field (e.g. 'rich_text', 'phone', 'currency', 'slider', 'toggle')."
+        },
+        "placeholder": {
+          "type": "string",
+          "description": "Optional placeholder text shown in the input."
+        }
+      }
+    },
+    "FieldOption": {
+      "type": "object",
+      "description": "Selectable option used by select-style fields.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Human-friendly label shown in the dashboard."
+        },
+        "value": {
+          "description": "Internal value stored when this option is selected.",
+          "type": ["string", "number", "boolean", "null"]
+        }
+      },
+      "required": ["value"],
+      "additionalProperties": false
+    },
+    "CoreFieldType": {
+      "type": "string",
+      "enum": [
+        "short_text",
+        "long_text",
+        "boolean",
+        "select",
+        "number",
+        "date",
+        "asset",
+        "tags",
+        "color",
+        "icon",
+        "lookup",
+        "collection",
+        "field_group",
+        "field_row"
+      ],
+      "description": "Core content field types that control the underlying data shape."
+    },
+    "AliasFieldType": {
+      "type": "string",
+      "enum": [
+        "text",
+        "textarea",
+        "rich_text",
+        "checkbox",
+        "checkboxes",
+        "toggle",
+        "radio",
+        "dropdown",
+        "integer",
+        "float",
+        "currency",
+        "percent",
+        "slider",
+        "time",
+        "datetime",
+        "phone",
+        "email",
+        "url",
+        "slug",
+        "html",
+        "basic_html",
+        "rich_html",
+        "markdown",
+        "liquid",
+        "image",
+        "document",
+        "video",
+        "customer_lookup",
+        "product_lookup",
+        "variant_lookup",
+        "category_lookup",
+        "child_collection"
+      ],
+      "description": "Alias field types exposed in the dashboard UI with preset defaults."
+    },
+    "FieldType": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/CoreFieldType"
+        },
+        {
+          "$ref": "#/$defs/AliasFieldType"
+        }
+      ],
+      "description": "Content field type or layout type."
+    },
+    "Field": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/ContentFieldBase"
+        },
+        {
+          "type": "object",
+          "description": "Content field configuration or layout element.",
+          "properties": {
+            "id": {
+              "type": "string",
+              "description": "Identifier of the field. Required for data-bearing fields."
+            },
+            "type": {
+              "$ref": "#/$defs/FieldType"
+            },
+            "value_type": {
+              "type": "string",
+              "description": "Optional override for the underlying data type."
+            },
+            "fallback": {
+              "type": "boolean",
+              "description": "Marks this field as a fallback value."
+            },
+            "default": {
+              "description": "Default value for the field or Liquid template.",
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "object"
+                },
+                {
+                  "type": "array"
+                }
+              ]
+            },
+            "conditions": {
+              "$ref": "#/$defs/ConditionExpression"
+            },
+            "root": {
+              "description": "Object path in the underlying model where this field is stored.",
+              "type": ["string", "boolean"]
+            },
+            "admin_span": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4,
+              "description": "Number of columns (1-4) this field should span in the admin grid."
+            },
+            "admin_zone": {
+              "type": "string",
+              "enum": [
+                "details",
+                "content",
+                "pricing",
+                "options",
+                "inventory",
+                "shipping",
+                "contact",
+                "billing",
+                "charge",
+                "refund",
+                "order",
+                "option-edit",
+                "option-value-edit",
+                "variant-edit",
+                "related",
+                "attributes"
+              ],
+              "description": "Named dashboard zone where this field should appear. Standard zones include 'details', 'content', 'pricing', 'shipping', etc."
+            },
+            "admin_enabled": {
+              "type": "boolean",
+              "description": "Controls whether this field is editable from the admin dashboard UI. [PLATFORM_INFERRED]"
+            },
+            "multi": {
+              "type": "boolean",
+              "description": "For select-style fields, indicates that multiple values may be selected."
+            },
+            "unique": {
+              "description": "When true, enforces uniqueness across the collection. When a string, enforces uniqueness within the scope of the specified field (e.g. 'parent_id').",
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "model": {
+              "type": "string",
+              "description": "For lookup fields, the model name to query (e.g. 'suppliers')."
+            },
+            "key": {
+              "type": "string",
+              "description": "For lookup fields, the local field id storing the foreign key."
+            },
+            "key_field": {
+              "type": "string",
+              "description": "For lookup fields, the target field name on the linked model."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "For lookup fields, limits the number of results displayed."
+            },
+            "min": {
+              "type": "number",
+              "description": "Minimum allowed numeric value or length."
+            },
+            "max": {
+              "type": "number",
+              "description": "Maximum allowed numeric value or length."
+            },
+            "digits": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "For number fields, number of decimal digits to round to."
+            },
+            "increment": {
+              "type": "number",
+              "description": "For slider fields, the step increment."
+            },
+            "localized": {
+              "type": "boolean",
+              "description": "When true, indicates that the value can be localized."
+            },
+            "unit": {
+              "type": "string",
+              "description": "Optional unit label for numeric values (e.g. '%', 'kg')."
+            },
+            "enum": {
+              "type": "array",
+              "description": "Optional list of allowed values.",
+              "items": {
+                "type": ["string", "number", "boolean", "null"]
+              }
+            },
+            "asset_types": {
+              "type": "array",
+              "description": "Allowed asset types for file uploads (e.g. ['image', 'video']).",
+              "items": {
+                "type": "string"
+              }
+            },
+            "item_label": {
+              "type": "string",
+              "description": "For collection fields, the id of the nested field used as the row label."
+            },
+            "icon": {
+              "type": "string",
+              "description": "For collection fields, optional icon identifier."
+            },
+            "options": {
+              "type": "array",
+              "description": "Available options for select-style fields.",
+              "items": {
+                "$ref": "#/$defs/FieldOption"
+              }
+            },
+            "$locale": {
+              "type": "string",
+              "description": "Optional locale override. [PLATFORM_INFERRED]"
+            },
+            "$currency": {
+              "type": "string",
+              "description": "Optional currency override. [PLATFORM_INFERRED]"
+            },
+            "collection_parent_id": {
+              "type": "string",
+              "description": "For collection fields, the id of the parent collection."
+            },
+            "collection_parent_field": {
+              "type": "string",
+              "description": "For collection fields, the field name on the parent collection."
+            },
+            "collection": {
+              "type": "string",
+              "description": "For collection/lookup fields, the related collection."
+            },
+            "query": {
+              "$ref": "#/$defs/QueryExpression"
+            },
+            "formula": {
+              "type": "string",
+              "description": "Formula expression for computed fields (e.g. 'like_count - dislike_count')."
+            },
+            "link": {
+              "type": "object",
+              "description": "For collection fields, configuration for linking rows to records.",
+              "properties": {
+                "params": {
+                  "type": "object",
+                  "description": "Map of URL parameter names to local field IDs (e.g. { \"product_id\": \"id\" }).",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": true
+            },
+            "fields": {
+              "type": "array",
+              "description": "Nested fields for collection, field_group, or field_row types.",
+              "items": {
+                "$ref": "#/$defs/Field"
+              }
+            }
+          },
+          "required": ["type"]
+        },
+        {
+          "$ref": "content-field-guards.json"
+        }
+      ]
+    },
+    "ViewNav": {
+      "type": "object",
+      "description": "Navigation configuration for a list view entry.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Label shown in the sidebar navigation."
+        },
+        "parent": {
+          "type": "string",
+          "enum": [
+            "orders",
+            "products",
+            "subscriptions",
+            "discounts",
+            "reporting",
+            "customers",
+            "content"
+          ],
+          "description": "Parent navigation section. If not defined, the view appears at top-level using the icon property."
+        },
+        "icon": {
+          "type": "string",
+          "description": "Icon identifier for top-level navigation items (when parent is not defined)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ViewField": {
+      "type": "object",
+      "description": "Field configuration within a view.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifier of the underlying content field or standard model field."
+        },
+        "label": {
+          "type": "string",
+          "description": "Override label for this field in this view."
+        },
+        "description": {
+          "type": "string",
+          "description": "Override help text for this field in this view."
+        },
+        "type": {
+          "description": "Optional override type or layout type (e.g. 'field_row').",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FieldType"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "readonly": {
+          "type": "boolean",
+          "description": "When true, disables editing of this field in this view."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "When true, requires a value in this view."
+        },
+        "default": {
+          "description": "Override default value.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "object"
+            },
+            {
+              "type": "array"
+            }
+          ]
+        },
+        "conditions": {
+          "$ref": "#/$defs/ConditionExpression"
+        },
+        "admin_span": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4,
+          "description": "Override column span."
+        },
+        "truncated": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "For text fields in list views, max characters to display."
+        },
+        "template": {
+          "type": "string",
+          "description": "Liquid-style template for rendering the field value."
+        },
+        "format": {
+          "type": "string",
+          "description": "Legacy name for template."
+        },
+        "options": {
+          "type": "array",
+          "description": "Override options for select-style fields.",
+          "items": {
+            "$ref": "#/$defs/FieldOption"
+          }
+        },
+        "fields": {
+          "type": "array",
+          "description": "For layout elements like 'field_row', nested view fields.",
+          "items": {
+            "$ref": "#/$defs/ViewField"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "field_row"
+              }
+            },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["fields"],
+            "errorMessage": "View fields with type 'field_row' must contain a 'fields' array."
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "ViewFilter": {
+      "type": "object",
+      "description": "Filter configuration displayed above a list view.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifier of the field this filter controls."
+        },
+        "label": {
+          "type": "string",
+          "description": "Label shown next to the filter control."
+        },
+        "type": {
+          "type": "string",
+          "description": "UI type used for the filter."
+        },
+        "options": {
+          "type": "array",
+          "description": "Available options for select-style filters.",
+          "items": {
+            "$ref": "#/$defs/FieldOption"
+          }
+        },
+        "conditions": {
+          "$ref": "#/$defs/ConditionExpression"
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    },
+    "ViewTab": {
+      "type": "object",
+      "description": "Tab configuration within a list or record view. List view tabs use 'query' to filter results. Record view tabs use 'fields' to organize form sections.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the tab. Used in the URL when navigating to this tab (typically a simplified version of the label)."
+        },
+        "label": {
+          "type": "string",
+          "description": "Label displayed as the tab text in the dashboard UI."
+        },
+        "query": {
+          "$ref": "#/$defs/QueryExpression"
+        },
+        "fields": {
+          "type": "array",
+          "description": "Optional list of fields visible when this tab is active.",
+          "items": {
+            "$ref": "#/$defs/ViewField"
+          }
+        }
+      },
+      "required": ["id", "label"],
+      "additionalProperties": false
+    },
+    "View": {
+      "type": "object",
+      "description": "Content view configuration controlling how records appear in the dashboard. The 'type' determines rendering mode ('list' for tables, 'record' for forms), while 'id' identifies the specific view instance. Standard views ('list', 'edit', 'new') map to platform routes, while custom view ids enable multiple layouts accessible via dropdown selector.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifier of the view. Standard views use 'list' for collection tables, 'edit' for editing existing records, 'new' for creating records, and 'record' for generic single-record views."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["list", "record"],
+          "description": "View rendering mode: 'list' for collection/table views, or 'record' for detail/form views. If omitted, defaults to 'list' when id is 'list', otherwise defaults to 'record'."
+        },
+        "label": {
+          "type": "string",
+          "description": "Optional label displayed in the Swell dashboard. Shown in the view selector dropdown when multiple views of the same type exist."
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description of this view."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title template used for record views. Liquid syntax is supported."
+        },
+        "subtitle": {
+          "type": "string",
+          "description": "Subtitle template used for record views. Liquid syntax is supported."
+        },
+        "nav": {
+          "$ref": "#/$defs/ViewNav"
+        },
+        "filters": {
+          "type": "array",
+          "description": "Optional filters displayed above a list view.",
+          "items": {
+            "$ref": "#/$defs/ViewFilter"
+          }
+        },
+        "tabs": {
+          "type": "array",
+          "description": "Tabs displayed within this view. In list views, tabs filter collection results using queries. In record views, tabs organize fields into separate sections.",
+          "items": {
+            "$ref": "#/$defs/ViewTab"
+          }
+        },
+        "query": {
+          "$ref": "#/$defs/QueryExpression"
+        },
+        "fields": {
+          "type": "array",
+          "description": "Fields to be displayed in the view. The only required property is 'id', but any field property can be overridden to change behavior in this specific view layout. List views may ignore certain properties that are only relevant to record views.",
+          "items": {
+            "$ref": "#/$defs/ViewField"
+          }
+        },
+        "actions": {
+          "type": "array",
+          "description": "Optional list-level actions.",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "record_actions": {
+          "type": "array",
+          "description": "Optional record-level actions.",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "sort": {
+          "description": "Default sort applied to this view.",
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Field name (prefix with - for descending)."
+            },
+            {
+              "type": "object",
+              "description": "Map of field names to sort direction.",
+              "patternProperties": {
+                "^.*$": {
+                  "enum": ["asc", "desc", 1, -1]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "required": ["id"],
+      "additionalProperties": false
+    }
+  }
+}

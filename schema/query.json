@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://json.swell.store/query.json",
+  "title": "SwellQueryDefinition",
+  "type": "object",
+  "description": "Common query options (filters, sorting, pagination, expansions, and projections) used to define default collection queries, search presets, and public access constraints.",
+  "properties": {
+    "where": {
+      "type": "object",
+      "description": "Filter conditions using Swell query operators (e.g. `$and`, `$or`).",
+      "additionalProperties": true
+    },
+    "limit": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Maximum number of records to return."
+    },
+    "page": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Cursor for paginated responses."
+    },
+    "window": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of pages to pre-compute for pagination."
+    },
+    "sort": {
+      "type": "string",
+      "description": "Sort expression, e.g. `name asc` or `date_created desc`."
+    },
+    "expand": {
+      "type": "array",
+      "description": "List of relationship paths to expand in responses.",
+      "items": { "type": "string" }
+    },
+    "fields": {
+      "type": "array",
+      "description": "Field whitelist for projection.",
+      "items": { "type": "string" }
+    },
+    "after": {
+      "type": "string",
+      "description": "Cursor token indicating the starting point for results."
+    },
+    "before": {
+      "type": "string",
+      "description": "Cursor token indicating the end point for results."
+    }
+  }
+}
