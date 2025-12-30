@@ -80,7 +80,7 @@ export type Field = ContentFieldBase & {
     | "related"
     | "attributes";
   /**
-   * For select-style fields, indicates that multiple values may be selected.
+   * Enables multiple value selection. Supported on select-style fields (select, checkboxes, radio, dropdown) and asset fields (asset, image, video, document).
    */
   multi?: boolean;
   /**
@@ -104,11 +104,11 @@ export type Field = ContentFieldBase & {
    */
   limit?: number;
   /**
-   * Minimum allowed numeric value or length.
+   * For text fields (short_text, long_text): minimum character length. For number fields: minimum allowed value.
    */
   min?: number;
   /**
-   * Maximum allowed numeric value or length.
+   * For text fields (short_text, long_text): maximum character length. For number fields: maximum allowed value.
    */
   max?: number;
   /**
@@ -132,7 +132,7 @@ export type Field = ContentFieldBase & {
    */
   enum?: (string | number | boolean | null)[];
   /**
-   * Allowed asset types for file uploads (e.g. ['image', 'video']).
+   * Restricts allowed file types for asset fields. Use for multiple types (e.g. ['image', 'video']) or specific mime types (e.g. ['image/png']). For single types, prefer preset types: 'image', 'video', 'document'.
    */
   asset_types?: string[];
   /**
@@ -251,14 +251,14 @@ export interface View {
 }
 
 /**
- * Content field type or layout type.
+ * Field type selection. Prefer preset types (rich_text, image, currency, etc.) when they match your use case; use base types (long_text, asset, number) only for custom configurations.
  */
-export type FieldType = CoreFieldType;
+export type FieldType = BaseFieldType | PresetFieldType;
 
 /**
- * Core content field types that control the underlying data shape.
+ * Fundamental field types. Use when preset types don't match your needs or you need custom property combinations.
  */
-export type CoreFieldType =
+export type BaseFieldType =
   | "short_text"
   | "long_text"
   | "boolean"
@@ -273,6 +273,43 @@ export type CoreFieldType =
   | "collection"
   | "field_group"
   | "field_row";
+
+/**
+ * Pre-configured field types with optimized defaults. PREFERRED over base types when they match your use case. Example: use 'image' instead of 'asset' with asset_types for image-only uploads; use 'currency' instead of 'number' for monetary values.
+ */
+export type PresetFieldType =
+  | "text"
+  | "textarea"
+  | "rich_text"
+  | "checkbox"
+  | "checkboxes"
+  | "toggle"
+  | "radio"
+  | "dropdown"
+  | "integer"
+  | "float"
+  | "currency"
+  | "percent"
+  | "slider"
+  | "time"
+  | "datetime"
+  | "phone"
+  | "email"
+  | "url"
+  | "slug"
+  | "html"
+  | "basic_html"
+  | "rich_html"
+  | "markdown"
+  | "liquid"
+  | "image"
+  | "document"
+  | "video"
+  | "customer_lookup"
+  | "product_lookup"
+  | "variant_lookup"
+  | "category_lookup"
+  | "child_collection";
 
 /**
  * Field configuration within a view.
@@ -454,10 +491,6 @@ export interface ContentFieldBase {
    * Restricts this field from public API access.
    */
   private?: boolean;
-  /**
-   * UI style or variant for this field (e.g. 'rich_text', 'phone', 'currency', 'slider', 'toggle').
-   */
-  ui?: string;
   /**
    * Optional placeholder text shown in the input.
    */
