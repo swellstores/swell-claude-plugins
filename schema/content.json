@@ -157,7 +157,7 @@
             "video",
             "document"
           ],
-          "description": "UI variant for the field. Valid values depend on field type: short_text (slug, email, phone, url), long_text (rich_text, basic_html, rich_html, markdown, liquid), number (float, currency, slider), select (radio, checkboxes), boolean (toggle), date (time, datetime), asset (image, video, document). For asset fields, prefer using 'asset_types' or alias types (e.g. type: 'image') which both restrict file types and optimize UI."
+          "description": "Internal UI variant override. Prefer using preset field types (e.g. 'rich_text', 'phone', 'image') instead of setting this property directly. [PLATFORM_INFERRED]"
         },
         "placeholder": {
           "type": "string",
@@ -181,7 +181,7 @@
       "required": ["value"],
       "additionalProperties": false
     },
-    "CoreFieldType": {
+    "BaseFieldType": {
       "type": "string",
       "enum": [
         "short_text",
@@ -199,9 +199,9 @@
         "field_group",
         "field_row"
       ],
-      "description": "Core content field types that control the underlying data shape."
+      "description": "Fundamental field types. Use when preset types don't match your needs or you need custom property combinations."
     },
-    "AliasFieldType": {
+    "PresetFieldType": {
       "type": "string",
       "enum": [
         "text",
@@ -237,18 +237,18 @@
         "category_lookup",
         "child_collection"
       ],
-      "description": "Alias field types exposed in the dashboard UI with preset defaults."
+      "description": "Pre-configured field types with optimized defaults. PREFERRED over base types when they match your use case. Example: use 'image' instead of 'asset' with asset_types for image-only uploads; use 'currency' instead of 'number' for monetary values."
     },
     "FieldType": {
       "oneOf": [
         {
-          "$ref": "#/$defs/CoreFieldType"
+          "$ref": "#/$defs/BaseFieldType"
         },
         {
-          "$ref": "#/$defs/AliasFieldType"
+          "$ref": "#/$defs/PresetFieldType"
         }
       ],
-      "description": "Content field type or layout type."
+      "description": "Field type selection. Prefer preset types (rich_text, image, currency, etc.) when they match your use case; use base types (long_text, asset, number) only for custom configurations."
     },
     "Field": {
       "allOf": [
@@ -335,7 +335,7 @@
             },
             "multi": {
               "type": "boolean",
-              "description": "For select-style fields, indicates that multiple values may be selected."
+              "description": "Enables multiple value selection. Supported on select-style fields (select, checkboxes, radio, dropdown) and asset fields (asset, image, video, document)."
             },
             "unique": {
               "description": "When true, enforces uniqueness across the collection. When a string, enforces uniqueness within the scope of the specified field (e.g. 'parent_id').",
@@ -399,7 +399,7 @@
             },
             "asset_types": {
               "type": "array",
-              "description": "Allowed asset types for file uploads (e.g. ['image', 'video']).",
+              "description": "Restricts allowed file types for asset fields. Use for multiple types (e.g. ['image', 'video']) or specific mime types (e.g. ['image/png']). For single types, prefer preset types: 'image', 'video', 'document'.",
               "items": {
                 "type": "string"
               }
