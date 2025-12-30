@@ -361,6 +361,66 @@
         },
         "errorMessage": "The 'icon' property is only valid for collection or child_collection fields."
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "min": {
+            "type": "number"
+          }
+        },
+        "required": ["min"]
+      },
+      "then": {
+        "properties": {
+          "type": {
+            "enum": [
+              "short_text",
+              "long_text",
+              "text",
+              "textarea",
+              "rich_text",
+              "number",
+              "integer",
+              "float",
+              "currency",
+              "percent",
+              "slider"
+            ]
+          }
+        },
+        "errorMessage": "The 'min' property is only supported on text and number-style fields."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "max": {
+            "type": "number"
+          }
+        },
+        "required": ["max"]
+      },
+      "then": {
+        "properties": {
+          "type": {
+            "enum": [
+              "short_text",
+              "long_text",
+              "text",
+              "textarea",
+              "rich_text",
+              "number",
+              "integer",
+              "float",
+              "currency",
+              "percent",
+              "slider"
+            ]
+          }
+        },
+        "errorMessage": "The 'max' property is only supported on text and number-style fields."
+      }
     }
   ]
 }

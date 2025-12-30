@@ -345,11 +345,11 @@
             },
             "min": {
               "type": "number",
-              "description": "Minimum allowed numeric value or length."
+              "description": "For text fields (short_text, long_text): minimum character length. For number fields: minimum allowed value."
             },
             "max": {
               "type": "number",
-              "description": "Maximum allowed numeric value or length."
+              "description": "For text fields (short_text, long_text): maximum character length. For number fields: maximum allowed value."
             },
             "digits": {
               "type": "integer",
