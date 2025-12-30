@@ -135,7 +135,29 @@
         },
         "ui": {
           "type": "string",
-          "description": "UI style or variant for this field (e.g. 'rich_text', 'phone', 'currency', 'slider', 'toggle')."
+          "enum": [
+            "slug",
+            "email",
+            "phone",
+            "url",
+            "rich_text",
+            "basic_html",
+            "rich_html",
+            "markdown",
+            "liquid",
+            "float",
+            "currency",
+            "slider",
+            "radio",
+            "checkboxes",
+            "toggle",
+            "time",
+            "datetime",
+            "image",
+            "video",
+            "document"
+          ],
+          "description": "UI variant for the field. Valid values depend on field type: short_text (slug, email, phone, url), long_text (rich_text, basic_html, rich_html, markdown, liquid), number (float, currency, slider), select (radio, checkboxes), boolean (toggle), date (time, datetime), asset (image, video, document). For asset fields, prefer using 'asset_types' or alias types (e.g. type: 'image') which both restrict file types and optimize UI."
         },
         "placeholder": {
           "type": "string",
