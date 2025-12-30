@@ -375,13 +375,13 @@ export interface ViewField {
  */
 export interface ViewTab {
   /**
-   * Unique identifier of the tab. Used in the URL when navigating to this tab (typically a simplified version of the label).
+   * Unique identifier of the tab. Use 'default' to override the auto-prepended Details tab in record views and redeclare its fields.
    */
   id: string;
   /**
-   * Label displayed as the tab text in the dashboard UI.
+   * Label displayed as the tab text in the dashboard UI. Defaults to wordified id if omitted.
    */
-  label: string;
+  label?: string;
   query?: QueryExpression;
   /**
    * Optional list of fields visible when this tab is active.
