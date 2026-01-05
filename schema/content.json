@@ -194,6 +194,7 @@
         "tags",
         "color",
         "icon",
+        "json",
         "lookup",
         "collection",
         "field_group",
