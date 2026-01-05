@@ -269,6 +269,7 @@ export type BaseFieldType =
   | "tags"
   | "color"
   | "icon"
+  | "json"
   | "lookup"
   | "collection"
   | "field_group"
@@ -314,7 +315,7 @@ export type PresetFieldType =
 /**
  * Field configuration within a view.
  */
-export interface ViewField {
+export type ViewField = {
   /**
    * Identifier of the underlying content field or standard model field.
    */
@@ -368,7 +369,7 @@ export interface ViewField {
    * For layout elements like 'field_row', nested view fields.
    */
   fields?: ViewField[];
-}
+};
 
 /**
  * Tab configuration within a list or record view. List view tabs use 'query' to filter results. Record view tabs use 'fields' to organize form sections.
