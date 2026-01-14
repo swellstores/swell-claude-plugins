@@ -405,11 +405,29 @@ export interface ViewFilter {
   /**
    * UI type used for the filter.
    */
-  type?: string;
+  type?:
+    | "short_text"
+    | "long_text"
+    | "number"
+    | "select"
+    | "boolean"
+    | "date"
+    | "asset"
+    | "tags"
+    | "color"
+    | "lookup"
+    | "product_lookup"
+    | "variant_lookup"
+    | "category_lookup"
+    | "customer_lookup";
   /**
    * Available options for select-style filters.
    */
   options?: FieldOption[];
+  /**
+   * Target collection for the lookup filter.
+   */
+  collection?: string;
   conditions?: QueryExpression;
 }
 
@@ -448,6 +466,16 @@ export interface ViewNav {
     | "integrations"
     | "developer"
     | "settings";
+  /**
+   * URL pointing to the location of the view. May contain patterns such as {id} if the view expects a record to exist.
+   */
+  link?: string;
+  /**
+   * Link target for navigation.
+   */
+  target?:
+    | 'self'
+    | 'blank';
 }
 
 /**

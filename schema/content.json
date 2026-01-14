@@ -514,6 +514,18 @@
             "settings"
           ],
           "description": "Icon identifier for top-level navigation items (when parent is not defined). If unset, the app's logo_icon will appear as a secondary badge."
+        },
+        "link": {
+          "type": "string",
+          "description": "URL pointing to the location of the view. May contain patterns such as {id} if the view expects a record to exist."
+        },
+        "target": {
+          "type": "string",
+          "enum": [
+            "blank",
+            "self"
+          ],
+          "description": "Link target for navigation."
         }
       },
       "additionalProperties": false
@@ -642,6 +654,22 @@
         },
         "type": {
           "type": "string",
+          "enum": [
+            "short_text",
+            "long_text",
+            "number",
+            "select",
+            "boolean",
+            "date",
+            "asset",
+            "tags",
+            "color",
+            "lookup",
+            "product_lookup",
+            "variant_lookup",
+            "category_lookup",
+            "customer_lookup"
+          ],
           "description": "UI type used for the filter."
         },
         "options": {
@@ -650,6 +678,10 @@
           "items": {
             "$ref": "#/$defs/FieldOption"
           }
+        },
+        "collection": {
+          "type": "string",
+          "description": "Target collection for the lookup filter."
         },
         "conditions": {
           "$ref": "#/$defs/ConditionExpression"
