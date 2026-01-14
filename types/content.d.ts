@@ -80,6 +80,10 @@ export type Field = ContentFieldBase & {
     | "related"
     | "attributes";
   /**
+   * Controls whether this field is editable from the admin dashboard UI.
+   */
+  admin_enabled?: boolean;
+  /**
    * Enables multiple value selection. Supported on select-style fields (select, checkboxes, radio, dropdown) and asset fields (asset, image, video, document).
    */
   multi?: boolean;
@@ -183,6 +187,68 @@ export type Field = ContentFieldBase & {
 };
 
 /**
+ * Field type selection. Prefer preset types (rich_text, image, currency, etc.) when they match your use case; use base types (long_text, asset, number) only for custom configurations.
+ */
+export type FieldType = BaseFieldType | PresetFieldType;
+
+/**
+ * Fundamental field types. Use when preset types don't match your needs or you need custom property combinations.
+ */
+export type BaseFieldType =
+  | "short_text"
+  | "long_text"
+  | "boolean"
+  | "select"
+  | "number"
+  | "date"
+  | "asset"
+  | "tags"
+  | "color"
+  | "icon"
+  | "json"
+  | "lookup"
+  | "collection"
+  | "field_group"
+  | "field_row";
+
+/**
+ * Pre-configured field types with optimized defaults. PREFERRED over base types when they match your use case. Example: use 'image' instead of 'asset' with asset_types for image-only uploads; use 'currency' instead of 'number' for monetary values.
+ */
+export type PresetFieldType =
+  | "text"
+  | "textarea"
+  | "rich_text"
+  | "checkbox"
+  | "checkboxes"
+  | "toggle"
+  | "radio"
+  | "dropdown"
+  | "integer"
+  | "float"
+  | "currency"
+  | "percent"
+  | "slider"
+  | "time"
+  | "datetime"
+  | "phone"
+  | "email"
+  | "url"
+  | "slug"
+  | "html"
+  | "basic_html"
+  | "rich_html"
+  | "markdown"
+  | "liquid"
+  | "image"
+  | "document"
+  | "video"
+  | "customer_lookup"
+  | "product_lookup"
+  | "variant_lookup"
+  | "category_lookup"
+  | "child_collection";
+
+/**
  * Content view configuration controlling how records appear in the dashboard. The 'type' determines rendering mode ('list' for tables, 'record' for forms), while 'id' identifies the specific view instance. Standard views ('list', 'edit', 'new') map to platform routes, while custom view ids enable multiple layouts accessible via dropdown selector.
  */
 export interface View {
@@ -251,71 +317,9 @@ export interface View {
 }
 
 /**
- * Field type selection. Prefer preset types (rich_text, image, currency, etc.) when they match your use case; use base types (long_text, asset, number) only for custom configurations.
- */
-export type FieldType = BaseFieldType | PresetFieldType;
-
-/**
- * Fundamental field types. Use when preset types don't match your needs or you need custom property combinations.
- */
-export type BaseFieldType =
-  | "short_text"
-  | "long_text"
-  | "boolean"
-  | "select"
-  | "number"
-  | "date"
-  | "asset"
-  | "tags"
-  | "color"
-  | "icon"
-  | "json"
-  | "lookup"
-  | "collection"
-  | "field_group"
-  | "field_row";
-
-/**
- * Pre-configured field types with optimized defaults. PREFERRED over base types when they match your use case. Example: use 'image' instead of 'asset' with asset_types for image-only uploads; use 'currency' instead of 'number' for monetary values.
- */
-export type PresetFieldType =
-  | "text"
-  | "textarea"
-  | "rich_text"
-  | "checkbox"
-  | "checkboxes"
-  | "toggle"
-  | "radio"
-  | "dropdown"
-  | "integer"
-  | "float"
-  | "currency"
-  | "percent"
-  | "slider"
-  | "time"
-  | "datetime"
-  | "phone"
-  | "email"
-  | "url"
-  | "slug"
-  | "html"
-  | "basic_html"
-  | "rich_html"
-  | "markdown"
-  | "liquid"
-  | "image"
-  | "document"
-  | "video"
-  | "customer_lookup"
-  | "product_lookup"
-  | "variant_lookup"
-  | "category_lookup"
-  | "child_collection";
-
-/**
  * Field configuration within a view.
  */
-export type ViewField = {
+export interface ViewField {
   /**
    * Identifier of the underlying content field or standard model field.
    */
@@ -369,7 +373,7 @@ export type ViewField = {
    * For layout elements like 'field_row', nested view fields.
    */
   fields?: ViewField[];
-};
+}
 
 /**
  * Tab configuration within a list or record view. List view tabs use 'query' to filter results. Record view tabs use 'fields' to organize form sections.
@@ -473,9 +477,7 @@ export interface ViewNav {
   /**
    * Link target for navigation.
    */
-  target?:
-    | 'self'
-    | 'blank';
+  target?: "blank" | "self";
 }
 
 /**
