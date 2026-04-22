@@ -6,7 +6,7 @@ interface SwellConfig {
   route?: {
     public?: boolean;                    // false requires secret key auth
     methods?: [SwellRequestMethod, ...SwellRequestMethod[]];
-    headers?: { [key: string]: string };
+    headers?: string[];                  // allow-list of incoming header names to forward; omit to forward all
     cache?: { timeout?: number };        // milliseconds, GET only
   };
   model?: {
@@ -38,9 +38,37 @@ interface SwellRequest {
     admin_url: string;
   };
   session?: { account_id?: string; [key: string]: any };  // authenticated user (routes)
-  data: { $event?: SwellEvent; [key: string]: any };  // model: record fields + $event; route: parsed body merged with query; cron: empty
+
+  // Trigger payload. model: record fields + $event. cron: empty. route: body ∪ query, query keys overwrite body keys.
+  // When body/query precedence matters (e.g. security-sensitive handlers), use req.body and req.query directly.
+  data: { $event?: SwellEvent; [key: string]: any };
+
+  // Parsed JSON body as object, or raw text string when body isn't JSON. Empty {} for model/cron triggers.
+  body: { [key: string]: any } | string;
+
   query: { [key: string]: string };      // URL query parameters (routes)
+
+  // Raw request body text, untouched by parsing.
+  // Use on route triggers for HMAC/webhook signature verification — re-stringifying `body` won't byte-match the original.
+  rawBody: string;
+
+  // true when invoked via `swell app dev` local proxy; false in production. Useful for dev-only branches (mock external APIs, skip destructive writes)
+  isLocalDev: boolean;
+
+  // Cloudflare Worker execution context. Use waitUntil() to run work after the response returns (logs, metrics, non-blocking side effects)
+  context: {
+    waitUntil(promise: Promise<unknown>): void;
+  };
+
   swell: SwellAPI;                       // authenticated platform client
+
+  /**
+   * Wrap values for the $app namespace when writing to standard model extensions.
+   * Returns `{ $app: { [appId]: values } }`. Pass `appId` as the first argument to target another app.
+   * @throws if values is not a plain object (arrays, class instances, null, and primitives are rejected)
+   */
+  appValues(values: object): { $app: { [appId: string]: object } };
+  appValues(appId: string, values: object): { $app: { [appId: string]: object } };
 }
 
 // Platform API client
@@ -57,7 +85,12 @@ declare class SwellResponse extends Response {
   constructor(data: string | object | undefined, options?: { status?: number; headers?: HeadersInit });
 }
 
-// Error handling
+/**
+ * Thrown by `req.swell.*` on non-2xx responses (and on non-GET 2xx responses containing `errors`).
+ * User code can also throw this to return error responses.
+ */
 class SwellError extends Error {
   constructor(message: string | object, options?: { status?: number });
+  status: number;
+  body?: any;   // structured response payload when the error was constructed from a non-string
 }

@@ -179,7 +179,6 @@ export const config: SwellConfig = {
   model: {
     events: ["review.created", "review.updated", "review.deleted"],
     conditions: { status: "approved" }, // filter invocations
-    sequence: 1, // priority among handlers for same event; lower = higher priority
   },
 };
 
@@ -212,7 +211,7 @@ export default async function (req: SwellRequest) {
 }
 ```
 
-**Cron Triggers** execute on a fixed schedule with no record context. CPU limit extends to 15 minutes for these tasks.
+**Cron Triggers** execute on a fixed schedule with no record context. Subject to the same 10s timeout as other functions.
 
 ```typescript
 export const config: SwellConfig = {
@@ -234,6 +233,7 @@ export const config: SwellConfig = {
     methods: ["post"],
     public: true, // false requires secret key authentication
     cache: { timeout: 5000 }, // milliseconds; applies to GET
+    headers: ["x-custom-token"], // allow-list of incoming header names to forward to the function; omit to forward all
   },
 };
 
@@ -259,7 +259,8 @@ export async function post(req: SwellRequest) {
 The `req` object provides authenticated access to platform resources.
 
 - `req.swell` is the authenticated Swell client. App collections are auto-scoped: `req.swell.get('/reviews')` equals `req.swell.get('/apps/<app_id>/reviews')`. Use `expand` to include linked records: `await swell.get('/reviews/{id}', { id, expand: ['account','product'] })`.
-- `req.data` — Trigger payload. For model events: the full record fields spread in, plus `$event` metadata (`{ id, type, model, app_id, data }`). `$event.data` narrows by event type: `created`/`deleted` carry the full record snapshot, `updated` carries only the changed fields (check `'field' in req.data.$event.data` to detect what changed), custom events carry the subset declared in the model's event `fields`. For routes: parsed JSON body merged with URL query params. For cron: empty.
+- `req.data` — Trigger payload. For model events: the full record fields spread in, plus `$event` metadata (`{ id, type, model, app_id, data }`). `$event.data` narrows by event type: `created`/`deleted` carry the full record snapshot, `updated` carries only the changed fields (check `'field' in req.data.$event.data` to detect what changed), custom events carry the subset declared in the model's event `fields`. For routes: body merged with URL query params (**query keys overwrite body keys** — use `req.body` / `req.query` directly when this matters). For cron: empty.
+- `req.body` / `req.query` / `req.rawBody` — Routes only. `body` is the parsed JSON object (or raw string when the body isn't JSON); `query` is URL params as `{[key]: string}`; `rawBody` is the untouched body text for HMAC/webhook signature verification (re-stringifying `body` won't byte-match the original).
 - `req.appId` — App identifier. Use instead of hardcoding.
 - `req.session` — User session when authenticated (routes).
 - `req.store` — Store metadata including `admin_url`.
@@ -274,9 +275,9 @@ await req.swell.put(`/products/${id}`, req.appValues({ review_count: 42, average
 
 Extension fields on standard models appear in responses under `$app.<app_id>.*`, not at the top level. This namespacing is automatic; no explicit expand is required to retrieve them. For app-defined collections, write fields directly at the root—you own the schema.
 
-**Return values.** Plain object → JSON 200. String → text/plain 200. For custom status/headers, return `new SwellResponse(data, { status, headers })` or a native `Response`. Throw `SwellError(msg, { status })` for errors. Model/cron handlers typically return nothing.
+**Return values.** Plain object → JSON 200. String → text/plain 200. For custom status/headers, return `new SwellResponse(data, { status, headers })` or a native `Response`. Throw `SwellError(msg, { status })` for errors. Errors from `req.swell.*` expose `error.status` (HTTP status) and `error.body` (structured payload); don't parse `error.message`. Model/cron handlers typically return nothing.
 
-**Response size.** All function responses (routes included) are captured by the platform for logging and silently truncated at ~75 KB. Paginate or stream via multiple calls rather than returning large collections.
+**Response size.** Function response bodies are silently dropped past 75 KB. JSON larger than that reaches the caller as an unparseable string — the platform does not finalize the truncated document. Paginate rather than returning large collections.
 
 **Auto-disable.** Model-event functions that fail continuously for ~4 days (2 days if timeout >10s; immediately on 404/worker-missing) stop receiving events until redeployed via `swell app push`. Routes and cron are unaffected.
 
