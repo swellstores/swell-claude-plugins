@@ -855,6 +855,35 @@
             ["id", "name", "status"],
             ["order_number", "total", "customer_id"]
           ]
+        },
+        "hooks": {
+          "type": "array",
+          "description": "Enables synchronous hook invocations for this event. Functions subscribe via 'before:<event>' / 'after:<event>' prefixes in their model.events config. Required on custom events before they can be used as hooks. Standard events (created/updated/deleted) already support before/after without declaration.",
+          "items": {
+            "type": "string",
+            "enum": ["before", "after"]
+          },
+          "examples": [["before", "after"], ["after"]]
+        },
+        "hook_timeout": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 60000,
+          "description": "Max time in ms the platform waits for a hook function. Overrides the function's own config.timeout for this event. App-own models only; cannot be declared on standard models."
+        },
+        "hook_reject_error": {
+          "type": "boolean",
+          "description": "When true, a hook function's thrown error aborts the originating API mutation. App-own models only. Defaults to true for an app-own model's own events, false otherwise. Standard-model hooks cannot abort mutations regardless of this setting."
+        },
+        "hook_retry_attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "Retry count for hook functions that fail with no status (timeout or network error). App-own models only."
+        },
+        "extension": {
+          "type": "boolean",
+          "description": "Marks this event as extension-invoked — fired only when a specific app extension is explicitly triggered by a client, not on any matching record change. Extension events do not require 'conditions'."
         }
       },
       "additionalProperties": true
