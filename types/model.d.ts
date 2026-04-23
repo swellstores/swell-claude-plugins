@@ -60,6 +60,24 @@ export interface SwellDataModel {
 }
 
 /**
+ * Discriminated union of field definitions by required 'type'.
+ */
+export type Field =
+  | StringField
+  | IntField
+  | FloatField
+  | BoolField
+  | DateField
+  | CurrencyField
+  | ObjectIdField
+  | ArrayField
+  | ObjectField
+  | CollectionField
+  | LinkField
+  | FileField
+  | FileDataField;
+
+/**
  * Base properties common to all field types.
  */
 export interface FieldBase {
@@ -96,24 +114,6 @@ export interface FieldBase {
    */
   private?: boolean;
 }
-
-/**
- * Discriminated union of field definitions by required 'type'.
- */
-export type Field =
-  | StringField
-  | IntField
-  | FloatField
-  | BoolField
-  | DateField
-  | CurrencyField
-  | ObjectIdField
-  | ArrayField
-  | ObjectField
-  | CollectionField
-  | LinkField
-  | FileField
-  | FileDataField;
 
 export type StringField = FieldBase & {
   type: "string";
@@ -532,6 +532,26 @@ export interface EventType {
    * Subset of field names to include in the event payload. When specified, only these fields are sent to webhooks and functions. When omitted, all fields are included. Useful for limiting sensitive data exposure or reducing payload size.
    */
   fields?: string[];
+  /**
+   * Enables synchronous hook invocations for this event. Functions subscribe via 'before:<event>' / 'after:<event>' prefixes in their model.events config. Required on custom events before they can be used as hooks. Standard events (created/updated/deleted) already support before/after without declaration.
+   */
+  hooks?: ("before" | "after")[];
+  /**
+   * Max time in ms the platform waits for a hook function. Overrides the function's own config.timeout for this event. App-own models only; cannot be declared on standard models.
+   */
+  hook_timeout?: number;
+  /**
+   * When true, a hook function's thrown error aborts the originating API mutation. App-own models only. Defaults to true for an app-own model's own events, false otherwise. Standard-model hooks cannot abort mutations regardless of this setting.
+   */
+  hook_reject_error?: boolean;
+  /**
+   * Retry count for hook functions that fail with no status (timeout or network error). App-own models only.
+   */
+  hook_retry_attempts?: number;
+  /**
+   * Marks this event as extension-invoked — fired only when a specific app extension is explicitly triggered by a client, not on any matching record change. Extension events do not require 'conditions'.
+   */
+  extension?: boolean;
   [k: string]: unknown;
 }
 
