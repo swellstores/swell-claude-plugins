@@ -3,17 +3,17 @@ type SwellRequestMethod = 'get' | 'post' | 'put' | 'delete';
 // Trigger configuration — exactly one of route, model, or cron must be specified
 interface SwellConfig {
   description?: string;
-  timeout?: number;                      // ms; 1000–10000 (default 10000). Higher values up to 20000 require platform feature enablement (not author-configurable).
+  timeout?: number;                      // ms; 1000–10000 (default 10000). Values above 10000 (up to 20000) are platform-enabled and set outside this field.
   extension?: string;                    // scope this function to a specific app extension (multi-extension apps only)
   route?: {
-    public?: boolean;                    // false requires secret key auth
+    public?: boolean;                    // default false — requires secret key auth; set true to expose without auth
     methods?: [SwellRequestMethod, ...SwellRequestMethod[]];
     headers?: string[];                  // allow-list of incoming header names to forward; omit to forward all
     cache?: { timeout?: number };        // ms, GET only; defaults to 5000 ms when omitted — set 0 to disable
   };
   model?: {
-    events: [string, ...string[]];       // async: 'review.created'; hook: 'before:review.created' or 'apps/<app_id>/reviews/before:review.created' (fully qualified for app-own models)
-    conditions?: object;                 // filter which records trigger
+    events: [string, ...string[]];       // async: 'review.created'; hook: 'before:review.created' / 'after:review.created', or 'apps/<app_id>/reviews/before:review.created' (fully qualified for app-own models)
+    conditions?: object;                 // MongoDB-style filter; may reference $record, $data, $event, $settings, $formula
     schedule?: { formula: string };      // date field for delayed execution
     fields?: string[];                   // narrows $event.data for custom events to the listed fields (has no effect on standard created/updated/deleted events)
   };
