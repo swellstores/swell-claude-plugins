@@ -224,7 +224,7 @@ export default async function (req: SwellRequest) {
 }
 ```
 
-**HTTP Route Triggers** expose custom API endpoints. Unlike other triggers, routes dispatch to a handler based on the HTTP method.
+**HTTP Route Triggers** expose custom API endpoints at the fixed path `/functions/<app_id>/<function_name>` — no URL path params (no `/users/:id`-style routing); pass identifiers via query (`?id=…`) or body. Unlike other triggers, routes dispatch to a handler based on the HTTP method.
 
 ```typescript
 export const config: SwellConfig = {
@@ -232,7 +232,7 @@ export const config: SwellConfig = {
   route: {
     methods: ["post"],
     public: true, // false requires secret key authentication
-    cache: { timeout: 5000 }, // milliseconds; applies to GET
+    cache: { timeout: 5000 }, // ms, GET only; defaults to 5000 ms when omitted — set 0 to disable
     headers: ["x-custom-token"], // allow-list of incoming header names to forward to the function; omit to forward all
   },
 };
@@ -250,6 +250,30 @@ export async function post(req: SwellRequest) {
 }
 ```
 
+**Model Event Hooks** — prefix any model event with `before:` or `after:` to run synchronously inside the originating API request (vs. async event triggers, which fire after the mutation persists). Hooks can read the pre-mutation record and mutate what gets saved.
+
+```typescript
+export const config: SwellConfig = {
+  description: "Validate review rating before save",
+  model: { events: ["apps/<app_id>/reviews/before:review.created"] },
+};
+
+export default async function (req: SwellRequest) {
+  const { $event, $record } = req.data;  // $event.hook === 'before'; $record undefined on create
+  if (req.data.rating > 5) throw new SwellError("Out of range", { status: 400 });
+  return { rating: Math.round(req.data.rating) }; // merged into record being saved
+}
+```
+
+- **Return-value semantics.** `before:created|updated` merges into the record being persisted. `after:created|updated` merges only into the event payload dispatched to async webhooks/notifications — it does NOT affect the stored record or the API response. `after:deleted` is the exception: its return merges into the delete response. `before:deleted` return is ignored.
+- **Pre-mutation context.** `req.data.$record` holds the pre-mutation record on `before:updated` / `after:updated` only (absent on create — check with `if (!$record)`; for deletes the record itself is spread into `req.data`). Use it for state-transition checks: `$record.status !== req.data.status`.
+- **Rejecting the mutation.** Throw `SwellError` to abort. Abort is only honored for hooks on **app-own models' own events** (defaults to reject; disable with `hook_reject_error: false`). Standard-model hooks (e.g. `before:product.created`) cannot abort — throws are absorbed into the response's `$function_errors` and the mutation proceeds. To block a standard-collection mutation, declare a custom hook event on an app-own model.
+- **Re-entrancy.** Writes from inside a hook re-trigger the same hook chain. Guard with `conditions` or a sentinel in `$app[req.appId]` — an unconditional write-back to the same collection stalls the originating request until `hook_timeout` fires.
+- **Event syntax.** Format is `<modelPath>/<hook>:<root>.<type>` — the hook prefix sits immediately before the event root, never before the model path (short form `'before:<root>.<type>'` is valid when no model path is given). The event root is the singular of the collection name (`review` for `reviews`, `product` for `products`). Short form works for standard models; use the fully-qualified `'apps/<app_id>/<model>/before:<root>.<type>'` for app-own models to avoid collisions with same-root standard models.
+- **Custom hook events** must be declared in the model first: `events.types: [{ id: 'reviewed', hooks: ['before','after'], conditions: {...}, hook_timeout: 5000, hook_reject_error: true }]`. `hook_timeout` ≤ 60000 ms (overrides the function's own `config.timeout`). `hook_retry_attempts` ≤ 3 (triggers on null-status timeouts/network errors). `hook_*` knobs are valid on app-own models only.
+- **One handler per app per hook event.** A second function in the same app subscribing to the same hook event (same `app_id + event.type + extension`) is logged as a conflict and silently skipped. Split work across `before`/`after` phases or combine into one handler.
+- **Decision guide.** Validate/modify before save → hook. React after the fact → async model trigger. Both honor `conditions` independently.
+
 **Handler export patterns.** The runtime resolves the handler in this order: (1) named export matching the request method, (2) default function export, (3) method on the default-exported object. Three forms work for any trigger type (model, cron, and schedule triggers always arrive as POST):
 
 - **Named exports** — `export async function post(req) {}`, one per method. Note: `delete` is a reserved keyword in strict mode and cannot be used as a function name; use the default-object form for DELETE handlers.
@@ -259,7 +283,7 @@ export async function post(req: SwellRequest) {
 The `req` object provides authenticated access to platform resources.
 
 - `req.swell` is the authenticated Swell client. App collections are auto-scoped: `req.swell.get('/reviews')` equals `req.swell.get('/apps/<app_id>/reviews')`. Use `expand` to include linked records: `await swell.get('/reviews/{id}', { id, expand: ['account','product'] })`.
-- `req.data` — Trigger payload. For model events: the full record fields spread in, plus `$event` metadata (`{ id, type, model, app_id, data }`). `$event.data` narrows by event type: `created`/`deleted` carry the full record snapshot, `updated` carries only the changed fields (check `'field' in req.data.$event.data` to detect what changed), custom events carry the subset declared in the model's event `fields`. For routes: body merged with URL query params (**query keys overwrite body keys** — use `req.body` / `req.query` directly when this matters). For cron: empty.
+- `req.data` — Trigger payload. For model events: the full record fields spread in, plus `$event` metadata (`{ id, type, model, app_id, data }`). `$event.data` narrows by event type: `created`/`deleted` carry the full record snapshot, `updated` carries only the changed fields (check `'field' in req.data.$event.data` to detect what changed), custom events carry the subset declared in the model's event `fields`. Hook invocations also include `req.data.$record` (current record pre-mutation; undefined on create) and `req.data.$event.hook` is `'before'` or `'after'`. For routes: body merged with URL query params (**query keys overwrite body keys** — use `req.body` / `req.query` directly when this matters). For cron: empty.
 - `req.body` / `req.query` / `req.rawBody` — Routes only. `body` is the parsed JSON object (or raw string when the body isn't JSON); `query` is URL params as `{[key]: string}`; `rawBody` is the untouched body text for HMAC/webhook signature verification (re-stringifying `body` won't byte-match the original).
 - `req.appId` — App identifier. Use instead of hardcoding.
 - `req.session` — User session when authenticated (routes).
@@ -281,7 +305,7 @@ Extension fields on standard models appear in responses under `$app.<app_id>.*`,
 
 **Auto-disable.** Model-event functions that fail continuously for ~4 days (2 days if timeout >10s; immediately on 404/worker-missing) stop receiving events until redeployed via `swell app push`. Routes and cron are unaffected.
 
-**Local testing.** Run `swell app dev` as a background process (one app per session) to stream function execution to your terminal. Trigger model events via `swell api [post|put|delete] /<collection>`; call routes via `swell api [method] /functions/<app_id>/<function_name> --body '{...}'`.
+**Local testing.** Run `swell app dev` as a background process (one app per session) to stream function execution to your terminal. Trigger model events via `swell api [post|put|delete] /<collection>`; call routes via `swell api [method] /functions/<app_id>/<function_name> --body '{...}'`. Forward caller headers with repeatable `-H 'Name: value'` (applies to `/functions/*` paths only). Caveat: `req.session` under `swell api` is the CLI admin session, not a storefront customer session — verify customer-scoped auth (e.g. `session?.account_id` gates) via integration tests.
 
 ## Settings
 
@@ -291,7 +315,7 @@ Each settings file creates a grouped panel in the App Preferences UI. Structure:
 
 ## Webhooks
 
-Webhooks send model events to external endpoints in `./webhooks/*.json`. Use when event handling logic lives outside Swell; for Swell-hosted logic, prefer functions.
+Webhooks send model events to external endpoints in `./webhooks/*.json`. Use when event handling logic lives outside Swell; for Swell-hosted logic, prefer functions. Webhooks subscribe to async events only — the `before:`/`after:` hook prefix is rejected at deploy; use a function for synchronous hook semantics.
 
 Payloads include event type, record data, store ID, and environment. Requests timeout after 30 seconds—endpoint must return HTTP 200. Retries use exponential backoff: initial retry within 1 minute, extending to 12-hour intervals after 10 failures. Webhook auto-disables after 7 days of failures; re-enabling retries all pending events.
 
