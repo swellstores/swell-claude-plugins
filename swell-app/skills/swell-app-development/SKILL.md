@@ -38,7 +38,7 @@ The Swell CLI orchestrates the complete development cycle. Commands follow consi
 
 All commands accept `--help` for detailed usage. Interactive commands accept `-y` to skip prompts.
 
-**Discovery** — `swell inspect {models|content}` lists remote (deployed) resources. Append a path for specifics: `/products` (standard), `/apps/<app_id>/<collection>` (app). Use before extending and after deploying to verify results.
+**Inspection** — `swell inspect {content|functions|models|notifications|settings|webhooks}` inspects remote (deployed) resources. List mode (no argument) groups resources by app. Always discover via list mode, copy the identifier from column 1, and paste it unchanged into detail mode — do not construct identifiers by hand, since shapes vary by resource type. Detail mode prints the full record JSON followed by a `Next steps:` footer of runnable follow-up commands. Add `--app=.` to scope to the app in the current `swell.json`. Use list mode for discovery and to avoid duplicating standard resources; use detail mode after `swell app push` to verify deployed configuration and runtime state.
 
 **Schema Reference** — `swell schema {content|function|model|notification|setting|webhook} --format=dts` prints annotated TypeScript declarations with examples. This is the authoritative reference for JSON structure. Always consult before authoring manifests—guessing field names or structure leads to validation failures.
 
@@ -75,8 +75,8 @@ Pass: Local validation passes with zero errors. TypeScript compiles without erro
 
 ## Gate 4 — Deploy & Verify
 
-Push resources to the platform test environment with `swell app push`. The platform performs additional validation beyond local schema checks: reference integrity (e.g., links to non-existent collections), reserved field conflicts, and event binding validity. Deployment errors indicate issues local validation cannot catch. Verify deployment with `swell inspect <type> <resource>`.
-Pass: Deployment completes without errors. Inspection confirms the resource exists remotely with correct configuration.
+Push resources to the platform test environment with `swell app push`. The platform performs additional validation beyond local schema checks: reference integrity (e.g., links to non-existent collections), reserved field conflicts, and event binding validity. Deployment errors indicate issues local validation cannot catch. Verify deployment with `swell inspect <type> --app=.` for list-level state (enabled, trigger, failure indicators) and `swell inspect <type> <key>` for the full record. For runtime probing, paste the commands printed under `Next steps` (e.g. `/events`, `/events:webhooks`) rather than constructing event or log queries by hand.
+Pass: Deployment completes without errors. List-mode meta shows the resource enabled with the expected trigger/binding; detail-mode JSON matches the source manifest.
 
 ## Gate 5 — Test
 
@@ -170,7 +170,7 @@ Note that lookup type can be set to the fields, declared with `"type": "link"` a
 
 Functions implement serverless logic in `./functions/*.ts`. Each file exports a `config` object specifying exactly one trigger (`model`, `route`, or `cron`) and a handler. Run `swell schema function --format=dts` for the authoritative type declarations — that schema is the post-decision shape reference for everything below.
 
-**Cross-cutting constraints.** Functions time out at 10s by default (configurable via `config.timeout`, 1000–10000 ms; values up to 20000 ms require platform feature enablement). Response bodies above 75 KB are silently dropped — paginate large collections rather than returning them. Model-event functions that fail continuously for ~4 days (2 days if `timeout` >10s; immediately on 404/worker-missing) auto-disable until redeployed via `swell app push`; cron and routes are unaffected.
+**Cross-cutting constraints.** Functions time out at 10s by default (configurable via `config.timeout`, 1000–10000 ms; values up to 20000 ms require platform feature enablement). Response bodies above 75 KB are silently dropped — paginate large collections rather than returning them. Model-event functions that fail continuously for ~4 days (2 days if `timeout` >10s; immediately on 404/worker-missing) auto-disable until redeployed via `swell app push`; cron and routes are unaffected. Use `swell inspect functions --app=.` to surface auto-disable status, trigger summary, and last failure date at a glance.
 
 ### Trigger selection
 
@@ -277,13 +277,13 @@ Run `swell app dev` as a background process (one app per session) to stream func
 
 Settings define merchant-configurable app behavior in `./settings/*.json`. Values are accessible in functions via `await req.swell.settings()` and in model/content conditions via `$settings`.
 
-Each settings file creates a grouped panel in the App Preferences UI. Structure: `label` (panel heading), `description` (explanatory text), and `fields` (array using content field syntax). Multiple files render as grouped panels. Settings returned by `swell.settings()` are namespaced under the filename (e.g., for `settings/new_section.json`, access values via `new_section.<field>`). `field_group` does not introduce nesting—its child fields are flattened to the parent level.
+Each settings file creates a grouped panel in the App Preferences UI. Structure: `label` (panel heading), `description` (explanatory text), and `fields` (array using content field syntax). Multiple files render as grouped panels. Settings returned by `swell.settings()` are namespaced under the filename (e.g., for `settings/new_section.json`, access values via `new_section.<field>`). `field_group` does not introduce nesting—its child fields are flattened to the parent level. Inspect the deployed record with `swell inspect settings --app=.`; an app's settings files collapse to one platform record at push time.
 
 ## Webhooks
 
 Webhooks send model events to external endpoints in `./webhooks/*.json`. Use when event handling logic lives outside Swell; for Swell-hosted logic, prefer functions. Webhooks subscribe to async events only — the `before:`/`after:` hook prefix is rejected at deploy; use a function for synchronous hook semantics.
 
-Payloads include event type, record data, store ID, and environment. Requests timeout after 30 seconds—endpoint must return HTTP 200. Retries use exponential backoff: initial retry within 1 minute, extending to 12-hour intervals after 10 failures. Webhook auto-disables after 7 days of failures; re-enabling retries all pending events.
+Payloads include event type, record data, store ID, and environment. Requests timeout after 30 seconds—endpoint must return HTTP 200. Retries use exponential backoff: initial retry within 1 minute, extending to 12-hour intervals after 10 failures. Webhook auto-disables after 7 days of failures; re-enabling retries all pending events. Use `swell inspect webhooks --app=.` to surface auto-disable status, subscribed events, and failure counts.
 
 Embed API secrets directly in the URL query string. Validate the secret server-side when receiving requests.
 
@@ -291,7 +291,7 @@ Embed API secrets directly in the URL query string. Validate the secret server-s
 
 Notifications are transactional emails triggered by model events, defined in `./notifications/` using a paired-file convention: a JSON manifest (`<name>.json`) and a Liquid template (`<name>.tpl`) must share the same base filename. Consult `swell schema notification --format=dts` for all configuration properties.
 
-**Event binding.** The `event` property must reference either a standard event (`created`, `updated`, `deleted`) or a custom event already declared in the collection's data model. Attempting to bind to an undeclared custom event causes deployment failure.
+**Event binding.** The `event` property must reference either a standard event (`created`, `updated`, `deleted`) or a custom event already declared in the collection's data model. Attempting to bind to an undeclared custom event causes deployment failure. Verify the deployed `(model, name)` binding with `swell inspect notifications --app=.`; the list key includes the model since name alone is not unique within an app.
 
 **Recipient resolution.** Set `contact` to a dot-notation path resolving to an email field (e.g., `"contact": "account.email"`), or set `admin: true` for store administrator delivery. Critical: any relationship in the contact path must appear in `query.expand`—`"contact": "account.email"` requires `"expand": ["account"]`.
 
