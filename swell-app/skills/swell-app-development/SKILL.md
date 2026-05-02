@@ -26,7 +26,7 @@ The file system acts as a rigid configuration contract. The existence and naming
 
 - **Logic.** Serverless functions reside in `./functions/`. Top-level TypeScript files become API endpoints or event handlers. Shared code—helpers, types, libraries—must be placed in subdirectories (e.g., `./functions/lib/`) to prevent exposure as a standalone function. Functions run on the Edge (Cloudflare Workers), not Node.js.
 
-- **Components.** The `./components/` directory contains bundled browser components. Top-level `.jsx` and `.tsx` files are compiled and deployed as app component configs. Components must export a `config` object; extension components set `config.extension` to the matching `swell.json` extension id.
+- **Components.** Browser UI for **payment checkout extensions only** — no admin, storefront, or shipping/tax host loads app components today. Top-level `./components/*.{jsx,tsx}` bundle as Preact and must export `config` (with `config.extension` matching a `swell.json` extension of `type: "payment"`) AND a default Preact component. The bundler validates only `config`; a missing default export deploys cleanly and renders nothing at runtime. Details in `references/payment-extensions.md`.
 
 - **Testing.** The `./test/` directory contains the Vitest suite. It includes `./test/unit/` and `./test/integration/` directories, plus helpers: `mock-request.ts` for mocking function context, `swell-client.ts` for data operations. Its Swell client uses CLI authentication to reach platform resources without client auth configuration.
 
@@ -36,7 +36,7 @@ The file system acts as a rigid configuration contract. The existence and naming
 
 ## Integration Apps & Extensions
 
-Integration apps declare extension slots in `swell.json` that the platform binds into native payment, shipping, or tax flows. Branch here when `swell.json` has `type: "integration"` or `extensions[]`, when functions set `config.extension`, when `components/` has top-level `.tsx`/`.jsx` files, or when the requested feature is a payment method, shipping service, or tax service.
+Integration apps declare extension slots in `swell.json` that the platform binds into native payment, shipping, or tax flows. Branch here when the requested feature is a payment method, shipping service, or tax service, or when `swell.json` has `type: "integration"` or `extensions[]`, when functions set `config.extension`, or when `components/` has top-level `.tsx`/`.jsx` files. Generic integrations (`type: "integration"` without `extensions[]`) need only `references/app-integrations.md`'s manifest section — skip the type-specific references.
 
 Two non-obvious traps distinguish extension work from ordinary app work:
 

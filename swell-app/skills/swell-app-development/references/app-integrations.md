@@ -1,148 +1,86 @@
 # Integration Apps
 
-Integration apps declare platform extension slots in `swell.json`. They are still normal Swell apps: settings deploy from `./settings/`, functions deploy from `./functions/`, assets deploy from `./assets/`, and app settings are read with `req.swell.settings()` like any other app.
+Read before authoring or debugging any extension. Then load `payment-extensions.md` (for `payment`) or `shipping-tax-extensions.md` (for `shipping`/`tax`) — not both. Settings, functions, and assets behave like any other Swell app; the only architectural difference is that extension slots let native platform flows dispatch into app-provided behavior.
 
-The difference is architectural: extension slots allow native platform flows to find app-provided behavior for payment, shipping, or tax.
+## Binding Model
 
-## Manifest Shape
+`swell app push` deploys code; it does not activate it. Dispatch fires only when (a) a native settings record selects this app via `extension_app_id`/`extension_config_id`, AND (b) the handler's `config.extension` matches the manifest extension `id`. Most "function never runs" reports are merchant-activation gaps, not code bugs.
 
-Use the CLI where possible:
+The extension `id` is the stable join key — `swell.json` extension `id`, function/component `config.extension`, and platform `extension_config_id` must all match exactly.
+
+`swell inspect extensions [--app=.]` returns three structured routing fields. Branch on `action_owner` first:
+
+- `action_owner` — `dev` (resolve `action`), `merchant` (surface `action` verbatim, stop debugging), or `null` (no action when activated).
+- `action` — pre-formatted next-step string. Use as-is; do not paraphrase.
+- `status` — labeled outcome (`activated`, `gateway missing`, `no handler`, etc.). Match the literal string, not a paraphrase. Diagnostic only — let `action_owner`/`action` drive behavior.
+
+Detail mode (`swell inspect extensions app.<slug>.<extId>`) adds a `Next steps:` footer of runnable commands; merchant-UI steps are prefixed `(merchant)`.
+
+Non-obvious invariants:
+
+- **Shipping alone treats `enabled: false` as a dispatch gate.** Payment-alt and tax dispatch fire whenever `extension_app_id` is set; for payment-alt, `enabled` is checkout-list visibility only.
+- **`missing_required_events` is independent of `status`.** Partial event coverage still reports `activated` — check the field separately.
+- **Use `app.<slug>.<extId>` from list-mode column 1** as the extension identifier. Hex ids from `bound.functions[].id` / `bound.components[].id` are not accepted — extensions are a synthesized resource with no canonical 24-char id.
+- **Non-null `local_diff`** means the deployed manifest differs from local `swell.json` — `swell app push` before debugging dispatch.
+
+## Manifest
+
+Scaffold with the CLI:
 
 ```bash
 swell create app my_payment --type integration --integration-type payment --integration-id my_method -y
 ```
 
-Minimal extension manifest:
+Minimal manifest:
 
 ```json
 {
-  "id": "my_payment",
-  "name": "My Payment",
-  "type": "integration",
-  "version": "1.0.0",
-  "permissions": [],
-  "extensions": [
-    {
-      "id": "my_method",
-      "type": "payment"
-    }
-  ]
+  "id": "my_payment", "name": "My Payment", "type": "integration", "version": "1.0.0",
+  "extensions": [{ "id": "my_method", "type": "payment" }]
 }
 ```
 
-Extension field support is platform-branch dependent. Before using optional fields, inspect the current app model/schema or an existing known-good app on the target branch. The current platform branch exposes these extension fields:
+Each extension entry binds into one native flow:
 
-| Field | Applies to | Purpose |
-|-------|------------|---------|
-| `id` | all extension types | Required stable extension config id. Must be unique within the app. |
-| `type` | all extension types | Required extension category: `payment`, `shipping`, or `tax`. |
-| `name` | all extension types | Display name in Admin settings. Falls back to app name. |
-| `description` | all extension types | Display text in Admin settings. Falls back to app description. |
-| `setting` | all extension types | Optional settings config name to render for this extension. If absent, Admin looks for a settings config whose name matches the extension `id`. |
-| `method` | payment | Payment method id. Defaults to the extension `id`; use `"card"` for card gateway replacement. |
-| `gateway` | payment | Payment gateway identifier/display metadata for card gateway style integrations. |
-| `method_logo_src`, `method_icon_src` | payment | Extension method display assets by source path/URL when supported by the deployed app installer. |
-| `gateway_logo_src`, `gateway_icon_src` | payment | Extension gateway display assets by source path/URL when supported by the deployed app installer. |
-| `carrier` | shipping | Shipping carrier id. Defaults to the extension `id`. |
-| `carrier_logo_src`, `carrier_icon_src` | shipping | Shipping carrier display assets by source path/URL when supported by the deployed app installer. |
-
-Apps can also deploy `extension_assets[]` with image file fields keyed by extension asset `id` (`method_*`, `gateway_*`, and `carrier_*` images). Use this for Admin-rendered icons/logos when the platform installer supports asset upload.
-
-Payment extensions may contain untyped fields that are not present in the typed extension schema but are still consumed by Admin/checkout. The most important is `subscriptions` on `payment` extensions:
-
-- `"subscriptions": true` on a payment extension entry tells the storefront that the alt method is selectable for carts containing subscription products. The BFF (swell-admin/server/api/checkout/index.js) reads the deployed `swell.json` and filters the method out of the storefront payment list whenever the cart has `subscription_delivery: true` and the extension does not set `subscriptions: true`.
-- Without the flag, the method is silently absent from the storefront for subscription carts even though the extension is installed and configured.
-- Set it on payment extensions whose provider supports recurring or subscription billing; omit it for one-time-only methods.
-
-Other untyped extension fields should be treated as branch/runtime-specific product contracts: preserve them when editing a known-good app, but do not add new ones unless you have verified the current platform branch consumes them. Before adding or depending on an untyped extension field:
-
-- inspect the current app model/schema;
-- search platform/admin/checkout code for the exact field;
-- confirm behavior in a deployed test store.
-
-Extension ids are the stable join key between:
-
-- `swell.json` extension entry: `"id": "my_method"`;
-- functions: `config.extension = "my_method"`;
-- components: `config.extension = "my_method"`;
-- the platform flow that selects an app id and extension id.
-
-## Extension Types
-
-Supported extension categories:
-
-| Type | Native flow | Common app resources |
-|------|-------------|----------------------|
+| Type | Native flow | Resources |
+|------|-------------|-----------|
 | `payment` | payment method, gateway, intent, charge, refund | `settings/`, `functions/`, optional `components/` |
 | `shipping` | shipment rating | `settings/`, `functions/` |
 | `tax` | tax calculation | `settings/`, `functions/` |
 
-Generic integrations use `"type": "integration"` without `extensions[]`. They are useful for apps that connect to third-party services but do not bind into native payment/shipping/tax flows.
+Extension fields (current platform branch):
 
-## Binding Model
+| Field | Required | Applies | Notes |
+|------|------|------|------|
+| `id` | yes | all | Stable extension config id; unique within the app |
+| `type` | yes | all | `payment` \| `shipping` \| `tax` |
+| `name`, `description` | no | all | Admin display; fall back to the app's |
+| `setting` | no | all | Settings-config name to render. Defaults to a config matching extension `id` |
+| `method` | no | payment | Payment method id; defaults to `id`. Use `"card"` for card-gateway replacement |
+| `gateway` | no | payment | Card-gateway display metadata |
+| `carrier` | no | shipping | Carrier id; defaults to `id` |
+| `*_logo_src`, `*_icon_src` | no | payment, shipping | Display assets (`method_*`, `gateway_*`, `carrier_*`); also reachable via `extension_assets[]`. `assets/icon.*` remains the app-level icon. |
 
-Deploying a function with a matching event does not make it run. Hook dispatch is filtered by platform flow and extension identity: the native flow selects an app id and an extension id, and the function's `config.extension` must match.
-
-Run `swell inspect extensions [--app=.]` for the activation chain — manifest, native bindings (with per-field `field_checks`), bound functions/components, required events, and a labeled `status`. Detail mode (`app.<slug>.<extId>`) emits a JSON envelope followed by a `Next steps:` footer of runnable shell commands per status; merchant-UI steps are prefixed `(merchant)`.
-
-Three structured fields drive routing:
-
-- `status` — labeled outcome of a first-failure-stops algorithm (`activated`, `not activated`, `app id mismatch`, `id mismatch`, `not selected`, `gateway missing`, `not enabled`, `no handler`, `handler mismatch`, `not deployed`). Match on these strings, not the colloquial type-tagged form.
-- `action_owner` — `dev` (you), `merchant` (user must perform a UI step), or `null` (no action needed when activated).
-- `action` — pre-formatted next-step string. Use verbatim.
-
-Non-obvious invariants the structured output doesn't make self-evident:
-
-- **Shipping is the only type where `enabled: false` blocks dispatch.** Payment-alt and tax dispatch fire whenever `extension_app_id` is set; for payment-alt, `enabled` is a checkout-visibility toggle only.
-- **`missing_required_events` is separate from `status`.** Partial event coverage stays `activated`; check the field independently.
-- **Identifier shape:** use `app.<slug>.<extId>` from list mode column 1. Hex ids from `bound.functions[].id` or `bound.components[].id` are not accepted — extensions are a synthesized resource with no canonical 24-char id.
-- **`local_diff` non-null** means the deployed app record's manifest differs from local `swell.json` — `swell app push` before debugging dispatch.
-
-Extension ids are the stable join key between `swell.json` extension `"id"`, function `config.extension`, component `config.extension`, and platform `extension_config_id`. Keep them identical.
+Untyped fields (e.g. `subscriptions: true` on payment extensions — see `payment-extensions.md`) are platform-branch contracts. Preserve them when editing known-good apps; do not introduce new ones without verifying the current platform consumes them (inspect the app schema, search platform code, confirm in a test store).
 
 ## Settings
 
-Settings behave like ordinary app settings. A setting file such as `settings/revolut.json` deploys as app settings and can be read from functions with:
+Behave like ordinary app settings:
 
 ```typescript
-const settings = await req.swell.settings();
+const settings = await req.swell.settings();                       // default
+const settings = await req.swell.settings(`${req.appId}/revolut`); // explicit
 ```
 
-When a function needs one settings group explicitly, pass the app/config id:
-
-```typescript
-const settings = await req.swell.settings(`${req.appId}/revolut`);
-```
-
-Use settings for merchant credentials, feature flags, and runtime options. Do not invent extension-specific settings semantics unless the current platform code or product requirement explicitly calls for them.
-
-Admin extension settings panels choose which `settings/*.json` config to render using this order:
-
-1. If the app has exactly one setting config and exactly one extension, render that setting.
-2. If the extension has a `setting` value, render the setting config with that name.
-3. Otherwise render the setting config whose name matches the extension `id`.
-
-For example, an extension `{ "id": "revolut" }` naturally maps to `settings/revolut.json`. If an app exposes multiple extensions that share one settings group, set each extension's `setting` property to that shared settings config name.
-
-Only settings fields marked `"public": true` are safe to expose to checkout/browser components. Provider secrets must remain non-public and be read only from functions.
-
-## Assets
-
-`assets/icon.*` remains the app icon. Extension manifests can also reference payment/shipping-specific icon or logo asset paths, but asset details are platform-schema dependent. Check the current app model/schema before adding extension asset fields.
+Mark fields `"public": true` to expose to checkout components; provider secrets must remain non-public. Do not invent extension-specific settings APIs — the standard `req.swell.settings()` is the only access path. By default the Admin renders `settings/<extension.id>.json` as an extension's settings panel; set the manifest's `setting` field to point to a different config when multiple extensions share one credentials group.
 
 ## Design Checklist
 
-Before editing an integration app, answer:
+Before authoring:
 
-- Which extension type is this: payment, shipping, tax, or generic?
-- What is the extension id?
-- Which native platform flow should select this extension?
-- Which functions are required for that flow?
-- Does the flow need a checkout/browser component?
-- Which settings are credentials/options, and are they ordinary app settings?
-- How will you prove the native flow selected this app and extension?
+- Extension `type` and `id`, and the native flow that will select them.
+- Whether a checkout component is needed (payment only — shipping/tax/generic have no component host today).
+- Which settings are credentials/options.
+- How you'll prove activation: `swell inspect extensions app.<slug>.<extId>` → `action_owner`/`action`.
 
-Then read the type-specific reference before implementing:
-
-- `payment-extensions.md`
-- `shipping-tax-extensions.md`
+Then read the type-specific reference: `payment-extensions.md` or `shipping-tax-extensions.md`.

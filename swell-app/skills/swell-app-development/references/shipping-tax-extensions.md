@@ -1,224 +1,169 @@
 # Shipping And Tax Extensions
 
-Shipping and tax extensions bind integration apps into native order calculation flows. They usually require:
+Bind integration apps into native order calculation. Read `app-integrations.md` first for manifest, binding model, and merchant activation basics.
 
-- `swell.json` with `shipping` or `tax` extension entries;
-- app settings for provider credentials/options;
-- extension hook functions on `order.shipping` or `order.taxes`.
+## Critical Contracts
 
-Use `app-integrations.md` first for manifest and binding basics.
+Three runtime traps no local check catches. Verify all three before claiming a shipping or tax extension is done.
 
-## Shipping Manifest
+### 1. Merchant Save activates dispatch — bound paths and field counts differ by type
+
+| Type | Native record | Fields written by Save | Singleton? |
+|------|---------------|------------------------|------------|
+| Shipping | `carriers.<extId>` | `enabled`, `extension_app_id`, `extension_config_id` (**all three required for dispatch**) | No — multiple shipping carriers coexist |
+| Tax | top-level `/settings/taxes` (one slot, hence singleton) | `extension_app_id`, `extension_config_id` | **Yes** — toggling another tax extension on auto-replaces this one |
+
+`swell app push` does not write any of these. Until the merchant performs the steps in §Merchant Activation, dispatch silently does not fire.
+
+**Verify:** `swell inspect extensions app.<slug>.<extId>` reports `status: "activated"`. If `action_owner === "merchant"`, surface `action` verbatim and stop debugging.
+
+### 2. Shipping is the only extension type where `enabled: false` blocks dispatch
+
+Tax (and payment-alt) dispatch fires whenever `extension_app_id` is set. Only shipping reads `enabled` as a dispatch gate — a shipping carrier with `enabled: false` and `extension_app_id` set still does not dispatch.
+
+### 3. Hook results merge into the calculation payload — they do not replace it
+
+Declare `model.fields` for every top-level field returned. Return only fields the platform should mutate. When bound, the extension is authoritative for the fields it returns; native calculation can still run for non-extension services/carriers in shipping, and for tax falls back to internal rules only when no extension is bound.
+
+## Manifest
+
+Shipping:
 
 ```json
 {
   "type": "integration",
   "extensions": [
-    {
-      "id": "fedex_rates",
-      "type": "shipping",
-      "carrier": "fedex"
-    }
+    { "id": "fedex_rates", "type": "shipping", "carrier": "fedex" }
   ]
 }
 ```
 
-Use `carrier` when the extension should bind to or present as a specific carrier. Check the current app schema before adding carrier icon/logo fields.
-
-## Tax Manifest
+Tax:
 
 ```json
 {
   "type": "integration",
   "extensions": [
-    {
-      "id": "tax_service",
-      "type": "tax"
-    }
+    { "id": "tax_service", "type": "tax" }
   ]
 }
 ```
 
-The platform flow decides which tax extension id is applicable for calculation. Verify that selection before assuming the function will run.
+`carrier` (shipping, optional) — carrier id used for binding and display; defaults to extension `id`. Set explicitly to bind into a specific named carrier slot rather than introduce a new one.
 
-## Hook Phases And Result Merging
+## Hook Function Contracts
 
-Shipping and tax extension events are model hooks owned by the platform order calculation flow. Use explicit hook phases in function configs:
+Both events are platform-owned model hooks. Use explicit `before:`/`after:` phases — bare events default to `after`.
 
-| Event | Recommended phase | Purpose |
-|-------|-------------------|---------|
-| `after:order.shipping` | `after` | Add or replace shipment rating services after the platform initializes `shipment_rating` and any standard rating/webhook work has run. |
-| `before:order.shipping` | optional `before` | Prepare data before standard shipping rating; use only when the app must affect inputs before native rating. |
-| `before:order.taxes` | common `before` | Calculate taxes when the selected app replaces internal tax calculation. |
-| `after:order.taxes` | optional `after` | Post-process calculated taxes or handle flows where taxes should be adjusted after native/webhook work. |
+| Function | Event | Recommended phase | model.fields | req.data carries | Return shape |
+|----------|-------|-------------------|--------------|------------------|--------------|
+| Shipping rating | `order.shipping` | `after` (default) | `["shipment_rating"]` | shipping address, items, currency/locale, existing `shipment_rating.services` | `{ shipment_rating: { services: [...] } }` |
+| Tax calc | `order.taxes` | `before` (replace native) or `after` (post-process) | `["items", "taxes"]` | items, currency/locale | `{ items: [{id, taxes: [...]}], taxes: [{id, name, amount}] }` |
 
-Bare extension events such as `order.shipping` or `order.taxes` default to the platform-defined extension phase (`after` in the current hook mapper). Prefer explicit phases so future readers can tell whether the function is meant to run before or after native calculation.
+Phase choice:
 
-Hook results are merged into the order calculation event data. Declare `model.fields` for top-level fields the function intentionally returns, such as `shipment_rating`, `items`, or `taxes`. Return only fields the platform should mutate.
+- `after:order.shipping` — default; add or replace services after native rating and webhooks run.
+- `before:order.shipping` — rare; mutate inputs before native rating.
+- `before:order.taxes` — replace native tax calculation entirely; the most common phase when bound.
+- `after:order.taxes` — post-process or coexist with native/webhook tax work.
 
-## Shipping Function
+For shipping, preserve existing `shipment_rating.services` in `after:` unless intentionally replacing native rating. For tax, return both per-item assignments and order-level totals when the provider supplies them. Keep service/tax `id`s stable — downstream recalculation and display key off them.
 
-Shipping extensions use the `order.shipping` hook:
+A second function in the same app subscribing to the same `event+extension+phase` is logged as a conflict and only one result is used. Split work across phases or combine into one handler.
+
+Verify `req.data` shape against the table by logging it on first invocation via `swell logs --type function --app=.`; remove diagnostic logs before finalizing.
+
+### Shipping example
 
 ```typescript
 export const config: SwellConfig = {
   extension: "fedex_rates",
   description: "Rate shipment",
-  model: {
-    events: ["after:order.shipping"],
-    conditions: {},
-    fields: ["shipment_rating"],
-  },
+  model: { events: ["after:order.shipping"], fields: ["shipment_rating"] },
 };
 
 export default async function (req: SwellRequest) {
   return {
     shipment_rating: {
       services: [
-        {
-          id: "fedex_ground",
-          name: "FedEx Ground",
-          price: 10,
-          carrier: "fedex",
-        },
+        { id: "fedex_ground", name: "FedEx Ground", price: 10, carrier: "fedex" },
       ],
     },
   };
 }
 ```
 
-The hook receives order/cart-like data including shipping address, items, currency/locale context, and any existing `shipment_rating.services` produced by standard services, webhooks, or earlier hooks. Return fields are merged into the native flow result.
+Service objects need stable `id`, `name`, `price`; optional `description`, `carrier`, provider metadata.
 
-When a shipping carrier is configured with `extension_app_id`, the platform triggers that app for shipping rating. Standard rating can still run for non-extension services/carriers. In an `after:order.shipping` function, preserve existing `shipment_rating.services` unless the app intentionally replaces them.
-
-This shape is based on current platform tests and sample behavior. Confirm the exact payload in function logs before depending on additional fields.
-
-Returned service objects should use stable ids and include enough display/rating data for checkout/admin:
-
-- `id`;
-- `name`;
-- `price`;
-- optional `description`;
-- optional `carrier`;
-- optional provider metadata needed later by the app.
-
-## Tax Function
-
-Tax extensions use the `order.taxes` hook:
+### Tax example
 
 ```typescript
 export const config: SwellConfig = {
   extension: "tax_service",
   description: "Calculate taxes",
-  model: {
-    events: ["before:order.taxes"],
-    conditions: {},
-    fields: ["items", "taxes"],
-  },
+  model: { events: ["before:order.taxes"], fields: ["items", "taxes"] },
 };
 
 export default async function (req: SwellRequest) {
   const item = req.data.items?.[0];
-
   return {
     items: [
-      {
-        id: item.id,
-        taxes: [
-          {
-            id: "provider_tax",
-            amount: 5,
-          },
-        ],
-      },
+      { id: item.id, taxes: [{ id: "provider_tax", amount: 5 }] },
     ],
     taxes: [
-      {
-        id: "provider_tax",
-        name: "Sales Tax",
-        amount: 5,
-      },
+      { id: "provider_tax", name: "Sales Tax", amount: 5 },
     ],
   };
 }
 ```
 
-Return both per-item tax assignments and order-level tax totals when the provider supplies them. Keep ids stable so downstream recalculation and display remain deterministic.
-
-When tax settings select an app extension with `extension_app_id`, the platform skips internal tax rule calculation and relies on the extension result. That makes the tax function authoritative for the tax fields it returns.
-
-This shape is based on current platform tests and sample behavior. Confirm the exact payload in function logs before depending on additional fields.
-
-## Hook Semantics
-
-Shipping and tax extension events are platform-owned hooks. The native flow determines which extension ids are applicable, then dispatches matching functions.
-
-Important implications:
-
-- `config.extension` should match the manifest extension id.
-- A function with `events: ["order.shipping"]` or `events: ["order.taxes"]` is not enough if the flow did not select the app/extension.
-- If no `before:` or `after:` prefix is supplied, extension events can default to the platform-defined hook phase. Prefer explicit phases.
-- Returned objects are merged into the order calculation payload; return only fields you intend to mutate.
-- Keep one handler per app/extension/event/phase unless the platform explicitly supports multiple functions for that combination. If multiple functions from the same app match the same event/extension/phase, only one result is usable and the platform logs a conflict.
-
 ## Settings
 
-Read provider credentials and options as normal app settings:
+Read provider credentials as normal app settings. Disambiguate when the app has multiple settings groups:
 
 ```typescript
-const settings = await req.swell.settings();
+const settings = await req.swell.settings();                       // default
+const settings = await req.swell.settings(`${req.appId}/provider`); // explicit
 ```
 
-If the app has multiple settings groups and a function needs one explicitly:
-
-```typescript
-const settings = await req.swell.settings(`${req.appId}/provider`);
-```
-
-Do not assume settings deploy, install, or access differently for shipping/tax extensions.
+Settings deploy and resolve identically to non-extension apps.
 
 ## Merchant Activation
 
-A successful `swell app push` does not activate a shipping or tax extension. The merchant must perform UI steps in the target store before native dispatch will pick the extension up. Code-only agents cannot perform these steps; when an extension is freshly deployed, surface them to the user as a manual verification step before debugging missing dispatch as a code problem.
+`swell app push` does not activate the extension. Code-only agents cannot perform these steps; surface them to the user when an extension is freshly deployed.
 
-### Shipping
+1. Install the app in the store.
+2. Open Settings → Shipping (for shipping) or Settings → Taxes (for tax). The extension appears as a row.
+3. *(Optional)* Open the extension's settings dialog, fill in provider credentials, and Save the dialog (writes the per-extension app settings).
+4. Toggle the row on and click **Save changes** at the page level.
 
-1. **Install the app** in the store.
-2. **Open Settings → Shipping.** The declared shipping extension appears as a carrier row.
-3. *(optional, when the extension exposes its own settings)* Click **Edit settings**, fill in provider credentials, and Save the dialog (this writes the per-extension `appSettings`).
-4. **Toggle the carrier `enabled`** on the row and click **Save changes** at the page level. The page form persists `carriers.<extensionId>.enabled = true` together with hidden `carriers.<extensionId>.extension_app_id` and `carriers.<extensionId>.extension_config_id` fields. Without all three (`enabled`, `extension_app_id`, `extension_config_id`), `order.shipping` does NOT dispatch to the extension.
+Step 4 writes:
 
-### Tax
+| Type | Persisted by Save |
+|------|-------------------|
+| Shipping | `carriers.<extId>.enabled = true` plus hidden `extension_app_id` and `extension_config_id`. **All three required** for dispatch. |
+| Tax | top-level `/settings/taxes.{extension_app_id, extension_config_id}`. Replaces any prior active tax extension. |
 
-Tax extensions are bound at the top level of `/settings/taxes`, not per extension, so only one tax extension can be active per store at a time.
+Without these fields, `order.shipping`/`order.taxes` does not dispatch to the extension. For tax, the platform falls back to its internal tax rules.
 
-1. **Install the app** in the store.
-2. **Open Settings → Taxes.** The declared tax extension appears as a row.
-3. *(optional)* Click **Edit settings**, fill in provider credentials, and Save the dialog.
-4. **Toggle the extension on** and click **Save changes** at the page level. Toggling another tax extension on later automatically replaces the previous one (the admin form holds a single `enabled` slot). Saving writes top-level `extension_app_id` and `extension_config_id` onto `/settings/taxes`. Without those two fields set, `order.taxes` does NOT dispatch to any extension and the platform falls back to its internal tax rules.
+## Verification & Common Mistakes
 
-## Verification Checklist
+Verify in order:
 
-Shipping:
+1. `swell inspect extensions app.<slug>.<extId>` reports `status: "activated"`. For tax, `not selected` means another tax extension is currently bound — toggling this one on auto-disables that one.
+2. Triggering the relevant flow fires the function:
+   - Shipping: change shipping address or cart contents.
+   - Tax: trigger order/cart recalculation.
+3. Returned fields persist on the calculated record (`shipment_rating.services` for shipping; `items[].taxes` and `taxes[]` for tax).
+4. `swell logs --type function --app=.` shows the invocation and provider response.
 
-- `swell inspect extensions app.<slug>.<extId>` reports `status: "activated"`;
-- changing shipping address or cart contents triggers `order.shipping`;
-- returned services appear in `shipment_rating.services`;
-- logs show the function invocation and provider response.
+Common mistakes:
 
-Tax:
-
-- `swell inspect extensions app.<slug>.<extId>` reports `status: "activated"` (tax is a singleton — `not selected` means another extension is bound; toggling this extension on auto-disables the other);
-- order/cart recalculation triggers `order.taxes`;
-- returned `items[].taxes` and `taxes[]` persist on the calculated record;
-- logs show the function invocation and provider response.
-
-When behavior is unclear, first add temporary structured logs of `req.data` to the extension functions in a test environment, trigger the native flow, and inspect `swell logs --type function --app=.`. Remove noisy logs before finalizing.
-
-## Common Mistakes
-
+- Adding `components/*.tsx` for shipping or tax UI — components are loaded only by checkout's payment step today; the bundle deploys but never renders.
 - Treating `order.shipping` or `order.taxes` as ordinary async model events.
-- Forgetting `config.extension`.
-- Returning a full provider response instead of the narrow fields the platform should merge.
+- Forgetting `config.extension`, or setting it to a value that doesn't equal the manifest extension `id` — the function misses extension-scoped dispatch.
+- Returning a full provider response instead of the narrow merge fields.
 - Returning tax totals without item-level tax details when downstream flows expect item taxes.
-- Assuming deploy alone proves the native flow selected the extension.
+- Two functions in the same app subscribing to the same `event+extension+phase` — only one result is used and the platform logs a conflict.
+- (Shipping) Saving the extension settings dialog but forgetting to toggle `enabled` on the carrier row.
+- (Tax) Assuming dispatch isn't competing — only one tax extension is active at a time.
