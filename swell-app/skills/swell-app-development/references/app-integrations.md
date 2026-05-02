@@ -81,72 +81,24 @@ Generic integrations use `"type": "integration"` without `extensions[]`. They ar
 
 ## Binding Model
 
-Do not assume that deploying a function with a matching event makes it run in every native flow. Extension hook dispatch is filtered by platform flow and extension identity:
+Deploying a function with a matching event does not make it run. Hook dispatch is filtered by platform flow and extension identity: the native flow selects an app id and an extension id, and the function's `config.extension` must match.
 
-- the native flow determines an app id and an extension id;
-- the function must subscribe to the relevant platform event;
-- the function's `config.extension`, when present, must match the selected extension id.
+Run `swell inspect extensions [--app=.]` for the activation chain — manifest, native bindings (with per-field `field_checks`), bound functions/components, required events, and a labeled `status`. Detail mode (`app.<slug>.<extId>`) emits a JSON envelope followed by a `Next steps:` footer of runnable shell commands per status; merchant-UI steps are prefixed `(merchant)`.
 
-Native settings are the source of that selection. Verify the exact selection path before debugging function code.
+Three structured fields drive routing:
 
-| Extension type | Native settings path | Settings key | Multi-instance? |
-|----------------|----------------------|--------------|-----------------|
-| Payment, alternative method | `/settings/payments/methods/<extension.id>` | `extension.id` (e.g. `revolut`). NOT `app_<appId>_<extensionId>`. | yes — one method record per extension `id` |
-| Payment, card gateway | `/settings/payments/methods/card` | `card` (fixed). Admin auto-creates a separate gateway record at `/settings/payments/gateways/app_<appId>_<extensionId>`. | one card gateway active at a time |
-| Shipping | `/settings/shipments/carriers/app_<appId>_<extensionId>` | the carrier `id` IS `app_<appId>_<extensionId>` (canonical, not "commonly") | yes — multiple enabled carriers |
-| Tax | `/settings/taxes` (top-level — NOT nested under any sub-collection) | n/a — `extension_app_id` / `extension_config_id` are stored directly on the taxes settings record | exactly one tax extension active |
+- `status` — labeled outcome of a first-failure-stops algorithm (`activated`, `not activated`, `app id mismatch`, `id mismatch`, `not selected`, `gateway missing`, `not enabled`, `no handler`, `handler mismatch`, `not deployed`). Match on these strings, not the colloquial type-tagged form.
+- `action_owner` — `dev` (you), `merchant` (user must perform a UI step), or `null` (no action needed when activated).
+- `action` — pre-formatted next-step string. Use verbatim.
 
-Asymmetry warning: payment alt methods key on `extension.id`, shipping carriers key on `app_<appId>_<extensionId>`, taxes use top-level fields with no key at all. Build the inspection path from this table — do not reuse the same shape across extension types.
+Non-obvious invariants the structured output doesn't make self-evident:
 
-How `extension.method` selects the binding for payment extensions:
+- **Shipping is the only type where `enabled: false` blocks dispatch.** Payment-alt and tax dispatch fire whenever `extension_app_id` is set; for payment-alt, `enabled` is a checkout-visibility toggle only.
+- **`missing_required_events` is separate from `status`.** Partial event coverage stays `activated`; check the field independently.
+- **Identifier shape:** use `app.<slug>.<extId>` from list mode column 1. Hex ids from `bound.functions[].id` or `bound.components[].id` are not accepted — extensions are a synthesized resource with no canonical 24-char id.
+- **`local_diff` non-null** means the deployed app record's manifest differs from local `swell.json` — `swell app push` before debugging dispatch.
 
-- `extension.method === 'card'` (or `extension.id === 'card'` when `method` is unset) → the extension is a card gateway, bound at `/settings/payments/methods/card`.
-- any other `extension.method` value, or unset → the extension is an alternative method, bound at `/settings/payments/methods/<extension.id>`.
-
-`extension_config_id` is normally the manifest extension `id`. If it is absent/null, the platform can dispatch app-level functions that do not set `config.extension`; do not rely on this fallback for ordinary extension apps. For app-extension work, keep `swell.json` extension `id`, native `extension_config_id`, function `config.extension`, and component `config.extension` identical.
-
-This means extension verification always needs three checks:
-
-1. The app resources deployed successfully.
-2. The native settings select the intended app id and extension id.
-3. The function/component config uses the same extension id.
-
-Concrete verification probes:
-
-```bash
-swell inspect functions --app=.
-swell inspect settings payments
-swell inspect settings shipments
-swell inspect settings taxes
-swell logs --type function --app=.
-```
-
-Use the settings probes that match the extension type. Look for `extension_app_id` and `extension_config_id` in native settings or calculated records, then confirm function logs for the expected event.
-
-When direct API probing is easier than reading the full settings record, use the native setting paths corresponding to the extension type:
-
-```bash
-# Payment alt method: <extension.id> is the key (e.g. "revolut")
-swell api get '/settings/payments/methods/<extension.id>'
-
-# Payment card gateway: method record is fixed to "card"; gateway record uses the app_<appId>_<extensionId> key
-swell api get '/settings/payments/methods/card'
-swell api get '/settings/payments/gateways/app_<appId>_<extensionId>'
-
-# Shipping: carrier id IS app_<appId>_<extensionId>
-swell api get '/settings/shipments/carriers/app_<appId>_<extensionId>'
-
-# Tax: top-level — extension fields live on the taxes settings record itself
-swell api get '/settings/taxes'
-```
-
-If a function never runs, debug selection in this order:
-
-1. The app is installed in the target environment.
-2. The relevant native settings contain the app id in `extension_app_id`.
-3. The native settings contain the intended extension id in `extension_config_id`.
-4. The app function has the matching `config.extension` and event/hook phase.
-5. The platform flow is actually exercising the method/carrier/tax setting under test.
+Extension ids are the stable join key between `swell.json` extension `"id"`, function `config.extension`, component `config.extension`, and platform `extension_config_id`. Keep them identical.
 
 ## Settings
 

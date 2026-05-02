@@ -201,18 +201,14 @@ Tax extensions are bound at the top level of `/settings/taxes`, not per extensio
 
 Shipping:
 
-- app deploys and extension is visible in the target store/admin context;
-- `swell inspect functions --app=.` shows the shipping function with the expected `extension` and event;
-- `swell inspect settings shipments` or the admin shipping settings show the native shipping flow selecting the intended app id and extension id. The carrier record at `/settings/shipments/carriers/<extensionId>` has `enabled = true`, `extension_app_id` set, and `extension_config_id` set. If any of the three is missing, the merchant has not yet completed Merchant Activation (toggle + Save changes on Settings → Shipping);
+- `swell inspect extensions app.<slug>.<extId>` reports `status: "activated"`;
 - changing shipping address or cart contents triggers `order.shipping`;
 - returned services appear in `shipment_rating.services`;
 - logs show the function invocation and provider response.
 
 Tax:
 
-- app deploys and extension is visible in the target store/admin context;
-- `swell inspect functions --app=.` shows the tax function with the expected `extension` and event;
-- `swell inspect settings taxes` or the admin tax settings show the native tax flow selecting the intended app id and extension id. `/settings/taxes` has top-level `extension_app_id` and `extension_config_id` matching the deployed extension. Tax has only ONE active extension per store; if a different app is bound, the merchant must toggle this extension on (which auto-disables the other) and Save changes;
+- `swell inspect extensions app.<slug>.<extId>` reports `status: "activated"` (tax is a singleton — `not selected` means another extension is bound; toggling this extension on auto-disables the other);
 - order/cart recalculation triggers `order.taxes`;
 - returned `items[].taxes` and `taxes[]` persist on the calculated record;
 - logs show the function invocation and provider response.

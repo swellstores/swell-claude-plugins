@@ -79,19 +79,9 @@ await updateCart({
 
 For a card gateway replacement, the method id is `card`, so native selection lives under `/settings/payments/methods/card`. The extension id still comes from the manifest entry and must match `methods.card.extension_config_id` and `config.extension`. The gateway record at `/settings/payments/gateways/app_<appId>_<extensionId>` is the metadata target and is created when the merchant saves the extension settings.
 
-Verify payment binding before debugging function code:
+Run `swell inspect extensions app.<slug>.<extId>` to confirm the binding — the command checks both `extension_app_id` and `gateway = app_<appId>_<extensionId>` and reports `gateway missing` if either is wrong. A successful `swell app push` followed by "my method does not appear in checkout" almost always reports `not activated` — surface `action` to the merchant. Direct function calls do not prove that the native payment flow selected the extension; exercise the real checkout/payment flow once activation is confirmed.
 
-```bash
-swell inspect functions --app=.
-# Alt method: key is the extension id (e.g. "revolut")
-swell api get '/settings/payments/methods/<extension.id>'
-# Card gateway: method key is fixed; gateway key is app_<appId>_<extensionId>
-swell api get '/settings/payments/methods/card'
-swell api get '/settings/payments/gateways/app_<appId>_<extensionId>'
-swell logs --type function --app=.
-```
-
-Look for the deployed function's `extension`, the native method's `extension_app_id` and `extension_config_id` (BOTH must be set — `extension_app_id` alone is not enough; `gateway` must also equal `app_<appId>_<extensionId>` or checkout's filter will drop the method), and function logs after exercising the real checkout/payment flow. Direct function calls do not prove that the native payment flow selected the extension. If `extension_app_id` or `gateway` is missing, the cause is almost always that the merchant has not yet saved the extension settings dialog — direct the merchant to Settings → Payments, open the extension entry, configure required fields, and Save.
+**Checkout visibility vs dispatch.** A payment-alt method record carries both `enabled` (checkout-visibility toggle) and `activated` (set by merchant activation flow). Neither is a dispatch gate — the platform dispatcher fires `payment.charge` / `payment.refund` / `payment.create_intent` whenever `extension_app_id` is set on the method record, regardless of `enabled` or `activated`. A method with `enabled: false` and `extension_app_id` set will dispatch from carts that reach checkout but won't appear in the payment list for shoppers. Shipping is the only type where `enabled` gates dispatch.
 
 ## Checkout Component
 
@@ -437,7 +427,7 @@ Code-only agents cannot perform these steps. When a payment extension is freshly
 1. `npm run typecheck` or the repo's equivalent passes, including component files when configured.
 2. `swell app push` succeeds.
 3. `swell inspect functions --app=.` shows the payment functions with the expected `extension` and events.
-4. `swell inspect settings payments` or the admin payment settings show the native payment flow selecting the intended app id and extension id at the correct path: `/settings/payments/methods/<extension.id>` for an alt method, or `/settings/payments/methods/card` plus `/settings/payments/gateways/app_<appId>_<extensionId>` for a card gateway. The method record has BOTH `extension_app_id` set AND `gateway = "app_<appId>_<extensionId>"`. If either is missing, the merchant has not yet saved the extension settings dialog (Settings → Payments → open extension → Save) — checkout's `getAppExtensionPaymentMethods` filter drops the method silently when either field is empty.
+4. `swell inspect extensions app.<slug>.<extId>` reports `status: "activated"`.
 4a. If the method must be selectable for subscription carts, the deployed `swell.json` extension entry has `"subscriptions": true`. Without this flag, the storefront silently filters the method out of any cart containing a subscription product.
 5. The checkout component loads and calls `onReady()`.
 6. Creating an intent returns browser-safe provider data.
