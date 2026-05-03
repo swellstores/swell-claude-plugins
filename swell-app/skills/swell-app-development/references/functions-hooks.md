@@ -75,6 +75,8 @@ Custom events used by hooks must be declared in the model first:
 - `hook_retry_attempts` ≤ 3 — triggers on null-status timeouts and network errors.
 - `hook_*` knobs are valid on app-own models only.
 
+A custom event can also declare `"extension": true`, which lets other apps' functions subscribe via `config.extension` and makes the event's `conditions` optional (the platform dispatches extension events explicitly rather than filtering by record state). This is the same mechanism the platform's payment/shipping/tax extension events use; see the relevant extension reference for dispatch semantics.
+
 ## One handler per app per hook event
 
 A second function in the same app subscribing to the same hook event (same `app_id + event.type + extension`) is logged as a conflict and silently skipped at deploy time. `extension` is the optional `config.extension` field that scopes a function to a specific app extension — single-extension apps can ignore it. Split work across `before` / `after` phases or combine into one handler.
