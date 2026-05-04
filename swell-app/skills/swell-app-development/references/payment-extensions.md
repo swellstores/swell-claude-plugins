@@ -118,7 +118,7 @@ The default order payment flow invokes `payment.charge` **twice** on a single or
 1. With `req.data.captured === false`: authorize the provider intent without capturing funds. The order flow creates the payment record with `captured: false`, which triggers the charge handler.
 2. With `req.data.captured === true`: capture the previously authorized intent. The order flow updates the payment to `captured: true`, which triggers the handler again via the platform's record-transition trigger.
 
-This is the platform default — not optional, not specific to redirect flows. The platform's own extension test (`api/com/features/payments/extensions.test.js`) asserts a single order creation produces exactly two `payment.charge` invocations with `captured: false` then `captured: true`.
+This is the platform default — not optional, not specific to redirect flows. The platform's own extension test asserts a single order creation produces exactly two `payment.charge` invocations with `captured: false` then `captured: true`.
 
 The canonical handler is two-branched and idempotent on the existing provider intent id:
 
@@ -134,6 +134,7 @@ export const config: SwellConfig = {
 
 export default async function (req: SwellRequest) {
   const { amount, currency, captured, intent, transaction_id } = req.data;
+  // "stripe" = processing provider key, must match what the component stored in billing.intent
   const existingIntentId = intent?.stripe?.id || transaction_id;
 
   try {
@@ -176,6 +177,16 @@ Invariants the handler must preserve:
 - Return the same `transaction_id` on the second call as on the first when continuing the same provider intent. The platform persists it as the payment's authoritative transaction id.
 - Validate provider state per phase: on authorize, `requires_capture` is the only valid result; on capture, accept `requires_capture` (then capture) or `succeeded` (already captured) and reject anything else. Silent acceptance of unexpected statuses returns `success: true` for payments that are not actually authorized.
 - Wrap provider calls in `try/catch` and convert thrown errors into `{ success: false, error: { message } }`. Uncaught throws bypass the platform return contract and surface as a generic function failure.
+
+## Triggering the Charge Flow (CLI)
+
+`payment.charge` fires inside the order→payment pipeline — not by calling the function endpoint or posting to `/payments` directly.
+
+    swell api post /orders --body '{"items":[{"product_id":"<id>","quantity":1}],"billing":{"method":"<methodId>","<methodId>":{"token":"test"}},"account_id":"<id>"}'
+
+`<methodId>` is `card` for card gateways, or the extension `id` for alt methods. Billing on the order is sufficient — no account-level billing pre-setup required.
+
+Verify: `swell logs --type function --app=.` — two `payment.charge` entries per Critical Contract #1. Zero entries means dispatch didn't reach the extension (check activation, not code).
 
 ## Checkout Component
 
@@ -251,7 +262,7 @@ await updateCart({
 });
 ```
 
-The backend payment hook receives method-specific billing under `req.data[methodId]` (e.g. `req.data.revolut`). If the component stores the token under the wrong method id, the charge function will not find it. Use a stable provider namespace under `billing.intent` (`stripe`, `paypal`, …) so charge/refund functions can retrieve provider-side state. Store only browser-safe identifiers; never persist secret keys or raw provider responses.
+The backend payment hook receives method-specific billing under `req.data[methodId]` (e.g. `req.data.revolut`). If the component stores the token under the wrong method id, the charge function will not find it. The `billing.intent` key is the **processing provider** that generates the intent — not the extension id. In this example, the extension is `revolut` but the intent key is `stripe` because Stripe is the payment processor. When extension and processor coincide (e.g. a Klarna extension calling Klarna APIs), the key happens to equal the extension id. The charge function reads the same key: `req.data.intent?.stripe?.id`. A mismatch between what the component stores and what the function reads yields `undefined` with no deploy-time or runtime error. Store only browser-safe identifiers; never persist secret keys or raw provider responses.
 
 ### Intent Request
 
