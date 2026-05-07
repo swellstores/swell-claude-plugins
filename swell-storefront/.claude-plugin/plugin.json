@@ -1,0 +1,8 @@
+{
+    "name": "swell-storefront",
+    "description": "Helps convert design prototypes into Swell Storefront Apps",
+    "author": {
+        "name": "Swell Team"
+    },
+    "version": "0.1.0"
+}
