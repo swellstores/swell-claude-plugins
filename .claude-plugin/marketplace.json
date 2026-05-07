@@ -8,6 +8,10 @@
     {
       "name": "swell-app",
       "source": "./swell-app"
+    },
+    {
+      "name": "swell-storefront",
+      "source": "./swell-storefront"
     }
   ]
 }
