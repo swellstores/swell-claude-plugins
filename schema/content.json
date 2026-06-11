@@ -99,7 +99,7 @@
   "$defs": {
     "QueryExpression": {
       "type": "object",
-      "description": "Query-style expression used for conditions and tab filters. Supports standard query properties like 'where' (filter object with query operators), 'limit' (max results), and 'sort' (sort directive like 'name asc'). Also supports direct field filters (e.g. { \"status\": \"active\", \"$settings.enabled\": true }).",
+      "description": "Query-style expression used for conditions and tab filters. Supports standard query properties like 'where' (filter object with query operators), 'limit' (max results), and 'sort' (sort directive like 'name asc'). Also supports direct field filters (e.g. { \"status\": \"active\", \"$settings.enabled\": true }); a bare filter object and the { \"where\": {...} } form are equivalent. In app content views on standard collections, 'where' keys are resolved by model metadata (recursing into $and/$or/$nor): keys matching the app's own extension fields are namespaced to $app.{appId}.{field} automatically, while native model fields pass through unchanged — app and native fields can be mixed in one query.",
       "additionalProperties": true
     },
     "ConditionExpression": {
@@ -122,8 +122,11 @@
           "description": "When true, the field value is required when editing records."
         },
         "readonly": {
-          "type": "boolean",
-          "description": "Prevents manual editing in the dashboard."
+          "description": "Prevents manual editing in the dashboard. Accepts a boolean, or a condition expression evaluated against the current record (same operators and scopes as 'conditions', including $settings.* and other apps' $app.{appId}.{field}) — the field becomes non-editable while the expression matches. Dashboard-only gate: does not block direct API writes; enforce data integrity in model rules or app functions.",
+          "oneOf": [
+            { "type": "boolean" },
+            { "$ref": "#/$defs/ConditionExpression" }
+          ]
         },
         "public": {
           "type": "boolean",
@@ -558,8 +561,11 @@
           ]
         },
         "readonly": {
-          "type": "boolean",
-          "description": "When true, disables editing of this field in this view."
+          "description": "Disables editing of this field in this view. Accepts a boolean, or a condition expression evaluated against the current record (same operators and scopes as 'conditions') — the field becomes non-editable while the expression matches. Dashboard-only gate: does not block direct API writes.",
+          "oneOf": [
+            { "type": "boolean" },
+            { "$ref": "#/$defs/ConditionExpression" }
+          ]
         },
         "required": {
           "type": "boolean",
@@ -763,6 +769,7 @@
           }
         },
         "query": {
+          "description": "Base query applied to list results in this view, in addition to any active tab query.",
           "$ref": "#/$defs/QueryExpression"
         },
         "fields": {
@@ -774,7 +781,7 @@
         },
         "actions": {
           "type": "array",
-          "description": "Optional list-level actions.",
+          "description": "Optional list-level actions. 'conditions' expressions on list-view (bulk) actions are not evaluated.",
           "items": {
             "type": "object",
             "additionalProperties": true
@@ -782,7 +789,7 @@
         },
         "record_actions": {
           "type": "array",
-          "description": "Optional record-level actions.",
+          "description": "Optional record-level actions. An action renders only when it is not 'hidden' and its 'conditions' expression matches the current record. Action conditions are evaluated against record fields only — no access to $settings.",
           "items": {
             "type": "object",
             "additionalProperties": true
