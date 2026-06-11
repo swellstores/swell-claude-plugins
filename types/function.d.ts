@@ -6,8 +6,14 @@
 /** http method */
 type SwellRequestMethod = 'get' | 'post' | 'put' | 'delete';
 
-/** Trigger configuration — exactly one of route, model, or cron must be specified */
-interface SwellConfig {
+/**
+ * Trigger configuration. Regular functions specify exactly one of route, model, or cron.
+ * Workflows (Beta — feature-gated; enabled per store by Swell support) use `kind: 'workflow'` with a class entrypoint instead.
+ */
+type SwellConfig = SwellFunctionConfig | SwellWorkflowConfig;
+
+interface SwellFunctionConfig {
+  kind?: 'function';
   description?: string;
   /** ms; 1000–10000 (default 10000). Values above 10000 (up to 20000) are platform-enabled and set outside this field. */
   timeout?: number;
@@ -45,6 +51,21 @@ interface SwellConfig {
   };
 }
 
+/**
+ * Workflow declaration (Beta — feature-gated; enabled per store by Swell support).
+ * The file default-exports a class with `run(req, step)` instead of a handler function.
+ * Workflows run only after `swell app push` — they do NOT execute under `swell app dev`.
+ */
+interface SwellWorkflowConfig {
+  kind: 'workflow';
+  description?: string;
+  route?: never;
+  model?: never;
+  cron?: never;
+  extension?: never;
+  timeout?: never;
+}
+
 /** Event metadata attached to req.data for model triggers */
 interface SwellEvent {
   id: string;
@@ -61,9 +82,9 @@ interface SwellEvent {
    * * `custom` — subset declared in model event `fields`
    */
   data: Record<string, any>;
-  /** Event delivery state */
-  delivery: {
-    /** The number of attempts to send an event to the function */
+  /** Event delivery state. Absent on synchronous hook invocations. */
+  delivery?: {
+    /** The number of attempts to send an event to the function (`0` on first delivery, increments on each retry) */
     attempts: number;
     /** The date of the first failure to send an event to the function */
     date_first_failed?: string;
@@ -152,6 +173,77 @@ interface SwellAPI {
    * Pass another app's id to read a different installed app's settings (cross-app).
    */
   settings(id?: string): Promise<Record<string, any>>;
+  /**
+   * Atomic multi-operation write (`POST /:transaction`). Max 10 operations; if any fails, the whole
+   * transaction rolls back and no partial writes are committed. Errors carry stable codes
+   * (`transaction_conflict`, `transaction_throttled`, `transaction_timeout`, `transaction_op_failed`) and
+   * `op_index` identifying the failed operation. Child operations fire no per-record webhooks or
+   * app functions; a successful transaction emits one `transaction.committed` event for the bundle.
+   */
+  transaction(
+    ops: Array<{ method: SwellRequestMethod; url: string; data?: object }>,
+    options?: { retry?: boolean }
+  ): Promise<any>;
+  /** Beta — feature-gated; enabled per store by Swell support */
+  workflows: SwellWorkflowsAPI;
+}
+
+/** Beta — feature-gated. Start workflow instances from app functions. */
+interface SwellWorkflowsAPI {
+  /**
+   * Start a workflow instance by name. `params` are passed through as `req.data` inside the workflow;
+   * they must be JSON-serializable and ≤128 KB — non-serializable params reject with
+   * `workflow_params_unserializable` before any instance is created.
+   */
+  create(workflowName: string, params?: unknown): Promise<{ id: string; status: 'active' }>;
+}
+
+/** Request context passed to a workflow's `run(req, step)` (Beta — feature-gated) */
+interface SwellWorkflowRequest {
+  id: string;
+  appId: string;
+  store: { id: string; url?: string; admin_url?: string };
+  /** params passed to `workflows.create()` */
+  data: unknown;
+  workflow: {
+    workflow_id: string;
+    workflow_name: string;
+    workflow_instance_id: string;
+    trigger: 'function';
+    request_id: string;
+  };
+  /** workflows never run under `swell app dev` */
+  isLocalDev: false;
+  swell: SwellWorkflowAPI;
+  appValues(values: object): { $app: Record<string, object | undefined> };
+  appValues(appId: string, values: object): { $app: Record<string, object | undefined> };
+}
+
+/** Platform client inside a workflow — same store access as functions */
+interface SwellWorkflowAPI {
+  get<T>(url: string, query?: object): Promise<T | null>;
+  put<T>(url: string, data?: object): Promise<T>;
+  post<T>(url: string, data?: object): Promise<T>;
+  delete<T>(url: string, data?: object): Promise<T>;
+  settings(): Promise<Record<string, any>>;
+}
+
+/** Durable step runner. Each `step.do(name, fn)` executes once — its result is recorded and not re-run on retry. */
+interface SwellWorkflowStep {
+  do<T>(name: string, callback: () => Promise<T>): Promise<T>;
+  do<T>(name: string, options: SwellWorkflowStepOptions, callback: () => Promise<T>): Promise<T>;
+  /** e.g. `'30 seconds'`; pauses without holding compute */
+  sleep(name: string, duration: string | number): Promise<void>;
+  sleepUntil(name: string, date: Date | string | number): Promise<void>;
+}
+
+interface SwellWorkflowStepOptions {
+  retries?: {
+    limit: number;
+    delay: string | number;
+    backoff?: 'constant' | 'linear' | 'exponential';
+  };
+  timeout?: string | number;
 }
 
 /** Response helper for custom status/headers; preferred over native Response */
@@ -162,9 +254,11 @@ declare class SwellResponse extends Response {
 /**
  * Thrown by `req.swell.*` on non-2xx responses (and on non-GET 2xx responses containing `errors`).
  * User code can also throw this to return error responses.
+ * On event-triggered functions, throw with `retry: false` to record the failed delivery
+ * (with its real status and message) without scheduling further retries.
  */
 declare class SwellError extends Error {
-  constructor(message: string | object, options?: { status?: number });
+  constructor(message: string | object, options?: { status?: number; retry?: boolean });
   status: number;
   /** structured response payload when the error was constructed from a non-string */
   body?: any;
