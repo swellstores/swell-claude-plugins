@@ -631,7 +631,7 @@
                 },
                 "key": {
                   "type": "string",
-                  "description": "Foreign key field in this model that stores the target record id (e.g., 'product_id')."
+                  "description": "Foreign key field in this model that stores the target record id (e.g., 'product_id'). In a standard-model extension, 'key' resolves against both your app's fields and the parent record's native fields (app fields win on name collisions) — but 'id' always refers to the parent record's id, so key links off a dedicated app field (e.g. 'channel_id'), never 'id'."
                 },
                 "value_type": {
                   "type": "string",
@@ -641,7 +641,7 @@
                 "params": {
                   "type": "object",
                   "additionalProperties": true,
-                  "description": "Static/dynamic query parameters. Supports field references (e.g., {'id': {'$in': 'category_ids'}})."
+                  "description": "Static/dynamic query parameters. Supports field references (e.g., {'id': {'$in': 'category_ids'}}). In a standard-model extension, field references resolve the same way as 'key' — 'id' always refers to the parent record's id (e.g. params: {'product_id': 'id'} filters by the parent product's id)."
                 }
               }
             },
