@@ -60,24 +60,6 @@ export interface SwellDataModel {
 }
 
 /**
- * Discriminated union of field definitions by required 'type'.
- */
-export type Field =
-  | StringField
-  | IntField
-  | FloatField
-  | BoolField
-  | DateField
-  | CurrencyField
-  | ObjectIdField
-  | ArrayField
-  | ObjectField
-  | CollectionField
-  | LinkField
-  | FileField
-  | FileDataField;
-
-/**
  * Base properties common to all field types.
  */
 export interface FieldBase {
@@ -114,6 +96,24 @@ export interface FieldBase {
    */
   private?: boolean;
 }
+
+/**
+ * Discriminated union of field definitions by required 'type'.
+ */
+export type Field =
+  | StringField
+  | IntField
+  | FloatField
+  | BoolField
+  | DateField
+  | CurrencyField
+  | ObjectIdField
+  | ArrayField
+  | ObjectField
+  | CollectionField
+  | LinkField
+  | FileField
+  | FileDataField;
 
 export type StringField = FieldBase & {
   type: "string";
@@ -414,7 +414,7 @@ export type LinkField = FieldBase &
          */
         model: string;
         /**
-         * Foreign key field in this model that stores the target record id (e.g., 'product_id').
+         * Foreign key field in this model that stores the target record id (e.g., 'product_id'). In a standard-model extension, 'key' resolves against both your app's fields and the parent record's native fields (app fields win on name collisions) — but 'id' always refers to the parent record's id, so key links off a dedicated app field (e.g. 'channel_id'), never 'id'.
          */
         key?: string;
         /**
@@ -422,7 +422,7 @@ export type LinkField = FieldBase &
          */
         value_type?: "collection" | "record";
         /**
-         * Static/dynamic query parameters. Supports field references (e.g., {'id': {'$in': 'category_ids'}}).
+         * Static/dynamic query parameters. Supports field references (e.g., {'id': {'$in': 'category_ids'}}). In a standard-model extension, field references resolve the same way as 'key' — 'id' always refers to the parent record's id (e.g. params: {'product_id': 'id'} filters by the parent product's id).
          */
         params?: {
           [k: string]: unknown;

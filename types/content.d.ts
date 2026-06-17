@@ -80,10 +80,6 @@ export type Field = ContentFieldBase & {
     | "related"
     | "attributes";
   /**
-   * Controls whether this field is editable from the admin dashboard UI.
-   */
-  admin_enabled?: boolean;
-  /**
    * Enables multiple value selection. Supported on select-style fields (select, checkboxes, radio, dropdown) and asset fields (asset, image, video, document).
    */
   multi?: boolean;
@@ -291,13 +287,13 @@ export interface View {
    */
   fields?: ViewField[];
   /**
-   * Optional list-level actions.
+   * Optional list-level actions. 'conditions' expressions on list-view (bulk) actions are not evaluated.
    */
   actions?: {
     [k: string]: unknown;
   }[];
   /**
-   * Optional record-level actions.
+   * Optional record-level actions. An action renders only when it is not 'hidden' and its 'conditions' expression matches the current record. Action conditions are evaluated against record fields only — no access to $settings.
    */
   record_actions?: {
     [k: string]: unknown;
@@ -319,7 +315,7 @@ export interface View {
 /**
  * Field configuration within a view.
  */
-export interface ViewField {
+export type ViewField = {
   /**
    * Identifier of the underlying content field or standard model field.
    */
@@ -337,9 +333,9 @@ export interface ViewField {
    */
   type?: FieldType | string;
   /**
-   * When true, disables editing of this field in this view.
+   * Disables editing of this field in this view. Accepts a boolean, or a condition expression evaluated against the current record (same operators and scopes as 'conditions') — the field becomes non-editable while the expression matches. Dashboard-only gate: does not block direct API writes.
    */
-  readonly?: boolean;
+  readonly?: boolean | QueryExpression;
   /**
    * When true, requires a value in this view.
    */
@@ -373,7 +369,7 @@ export interface ViewField {
    * For layout elements like 'field_row', nested view fields.
    */
   fields?: ViewField[];
-}
+};
 
 /**
  * Tab configuration within a list or record view. List view tabs use 'query' to filter results. Record view tabs use 'fields' to organize form sections.
@@ -511,9 +507,9 @@ export interface ContentFieldBase {
    */
   required?: boolean;
   /**
-   * Prevents manual editing in the dashboard.
+   * Prevents manual editing in the dashboard. Accepts a boolean, or a condition expression evaluated against the current record (same operators and scopes as 'conditions', including $settings.* and other apps' $app.{appId}.{field}) — the field becomes non-editable while the expression matches. Dashboard-only gate: does not block direct API writes; enforce data integrity in model rules or app functions.
    */
-  readonly?: boolean;
+  readonly?: boolean | QueryExpression;
   /**
    * Grants public storefront API access to this specific field.
    */
@@ -529,7 +525,7 @@ export interface ContentFieldBase {
 }
 
 /**
- * Query-style expression used for conditions and tab filters. Supports standard query properties like 'where' (filter object with query operators), 'limit' (max results), and 'sort' (sort directive like 'name asc'). Also supports direct field filters (e.g. { "status": "active", "$settings.enabled": true }).
+ * Query-style expression used for conditions and tab filters. Supports standard query properties like 'where' (filter object with query operators), 'limit' (max results), and 'sort' (sort directive like 'name asc'). Also supports direct field filters (e.g. { "status": "active", "$settings.enabled": true }); a bare filter object and the { "where": {...} } form are equivalent. In app content views on standard collections, 'where' keys are resolved by model metadata (recursing into $and/$or/$nor): keys matching the app's own extension fields are namespaced to $app.{appId}.{field} automatically, while native model fields pass through unchanged — app and native fields can be mixed in one query.
  */
 export interface QueryExpression {
   [k: string]: unknown;
